@@ -1,0 +1,47 @@
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>UDisc Round Dashboard Generator</title>
+     <link rel="stylesheet" href="style.css">
+ </head>
+ <body>
+    <div class="upload-section" id="uploadSection">
+        <h1>UDisc Round Dashboard Generator</h1>
+        <p>Upload your UDisc CSV file to generate a dashboard of your round statistics.</p>
+        <label for="csvFile" class="visually-hidden">Upload CSV file</label>
+        <input type="file" id="csvFile" accept=".csv" title="Upload CSV file">
+        <button onclick="processFile()">Analyze File</button>
+    </div>
+    <button id="openPlayerModal" class="floating-players-btn">Players</button>
+    <button id="openCourseModal" class="floating-courses-btn">Courses</button>
+    <div id="playerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closePlayerModal">&times;</span>
+            <h2>Select Players</h2>
+            <div id="playerCheckboxList" class="player-checkbox-list"></div>
+            <button id="applyPlayerSelection" class="apply-btn">Apply</button>
+        </div>
+    </div>
+    <div id="courseModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeCourseModal">&times;</span>
+            <h2>Select Courses</h2>
+            <div id="courseRadioList" class="player-checkbox-list"></div>
+            <button id="applyCourseSelection" class="apply-btn">Apply</button>
+        </div>
+    </div>
+    <div id="dashboardContainer"></div>
+    <!-- Scorecard Modal -->
+    <div id="scorecardModal" class="modal">
+        <div class="modal-content scorecard-modal-content">
+            <span class="close" id="closeScorecardModal">&times;</span>
+            <div id="scorecardContent"></div>
+        </div>
+    </div>
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+ </body>
+ </html>

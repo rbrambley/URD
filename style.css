@@ -1,0 +1,268 @@
+/* Scorecard modal content width */
+.scorecard-modal-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    min-width: 650px;
+    max-width: 1200px;
+    margin: 0 auto;
+    box-sizing: border-box;
+    padding: 0 24px;
+    overflow-x: auto;
+}
+.modal-content {
+    width: 100%;
+    box-sizing: border-box;
+}
+.scorecard-played {
+    color: #a3e635;
+    font-size: 1rem;
+    margin-left: 8px;
+    font-weight: 500;
+}
+/* Scorecard Modal/Table Styles */
+.scorecard-title {
+    font-size: 1.15rem;
+    margin: 18px 0 8px 0;
+    text-align: left;
+}
+.scorecard-layout {
+    color: #60a5fa;
+    font-weight: 500;
+}
+.scorecard-table {
+    margin-bottom: 32px;
+    border-radius: 8px;
+    overflow: hidden;
+    width: auto;
+    min-width: 600px;
+    max-width: 100%;
+    background: #181f2f;
+    box-shadow: 0 1.5px 4px 0 #0002;
+}
+.scorecard-table th {
+    background: #222b44;
+    color: #f9fafb;
+    font-size: 1rem;
+    padding: 6px 10px;
+}
+.scorecard-table td {
+    font-size: 1.05rem;
+    padding: 7px 10px;
+    text-align: center;
+}
+.scorecard-par {
+    background: #1e293b;
+    color: #facc15;
+    font-weight: 600;
+    border-bottom: 2px solid #facc15;
+    border-top: 2px solid #facc15;
+    font-size: 1.08rem;
+}
+.scorecard-avg {
+    background: #101624;
+    color: #e5e7eb;
+}
+.scorecard-best {
+    background: #14532d !important;
+    color: #bbf7d0 !important;
+    font-weight: bold;
+}
+.scorecard-worst {
+    background: #7f1d1d !important;
+    color: #fecaca !important;
+    font-weight: bold;
+}
+.scorecard-block {
+    margin-bottom: 36px;
+}
+/* Visually hidden class for accessibility */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+}
+/* Floating Courses Button */
+/* Floating Courses Button */
+.floating-courses-btn {
+    position: fixed;
+    top: 24px;
+    right: 160px;
+    z-index: 2001;
+    background: #222b44;
+    color: #e5e7eb;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px #0003;
+    display: none;
+}
+.floating-courses-btn.show {
+    display: block;
+}
+/* Left-align Course column in all tables */
+th, td {
+    /* ...existing code... */
+}
+th.left-align-col, td.left-align-col {
+    text-align: left !important;
+}
+/* Floating Players Button */
+/* Floating Players Button */
+.floating-players-btn {
+    position: fixed;
+    top: 24px;
+    right: 32px;
+    z-index: 2001;
+    background: #222b44;
+    color: #e5e7eb;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px #0003;
+    display: none;
+}
+.floating-players-btn.show {
+    display: block;
+}
+
+/* Modal Styles */
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 3000;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.4);
+    align-items: center;
+    justify-content: center;
+}
+.modal.show {
+    display: flex;
+}
+.modal-content {
+    background: #181f2f;
+    color: #e5e7eb;
+    margin: auto;
+    padding: 32px 32px 24px 32px;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 4px 32px #000a;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+.close {
+    color: #aaa;
+    position: absolute;
+    top: 16px;
+    right: 24px;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+.close:hover {
+    color: #fff;
+}
+.player-checkbox-list {
+    max-height: 320px;
+    overflow-y: auto;
+    margin: 18px 0 24px 0;
+    border-radius: 8px;
+    background: #222b44;
+    padding: 12px 8px;
+}
+.player-checkbox-list label {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+.player-checkbox-list input[type="checkbox"] {
+    margin-right: 12px;
+    accent-color: #4f8cff;
+    width: 18px;
+    height: 18px;
+}
+.apply-btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 0;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 8px;
+}
+.apply-btn:hover {
+    background: #45a049;
+}
+ body {
+     font-family: Arial, sans-serif;
+     max-width: 800px;
+     margin: 0 auto;
+     padding: 20px;
+ }
+ 
+ h1 {
+     color: #333;
+ }
+ 
+ input[type="file"] {
+     margin: 10px 0;
+ }
+ 
+ button {
+     background-color: #4CAF50;
+     color: white;
+     padding: 10px 20px;
+     border: none;
+     cursor: pointer;
+ }
+ 
+ button:hover {
+     background-color: #45a049;
+ }
+ 
+ #results {
+     margin-top: 20px;
+     padding: 10px;
+     border: 1px solid #ddd;
+     background-color: #f9f9f9;
+ }
+
+/* Best/Worst Round Summary Tiles */
+.card {
+    background: #181f2f;
+    border-radius: 8px;
+    padding: 12px 14px;
+    border: 1px solid #1f2937;
+    box-shadow: 0 1.5px 4px 0 #0002;
+}
+.card.best-round {
+    background: #14532d !important;
+    color: #bbf7d0 !important;
+    border-color: #22c55e !important;
+}
+.card.worst-round {
+    background: #7f1d1d !important;
+    color: #fecaca !important;
+    border-color: #ef4444 !important;
+}
