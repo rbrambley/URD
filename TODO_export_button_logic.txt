@@ -1,0 +1,4 @@
+// Remove any duplicate or old export button event listeners
+// Always show export buttons after dashboard render
+// Always attach event listeners after DOMContentLoaded
+// This file is a reminder to clean up export button logic if needed

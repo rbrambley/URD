@@ -127,8 +127,8 @@ function processFile() {
                 style.innerHTML = `
 body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background-color: #0b1020;
-    color: #e5e7eb;
+    background-color: var(--bg);
+    color: var(--text);
     margin: 0;
     min-height: 100vh;
     width: 100vw;
@@ -140,15 +140,15 @@ body {
     width: 95vw;
     margin: 48px auto 48px auto;
     padding: 32px 24px 48px 24px;
-    background: #111827;
+    background: var(--bg-surface);
     border-radius: 16px;
-    box-shadow: 0 4px 32px 0 #000a, 0 1.5px 4px 0 #0004;
+    box-shadow: 0 4px 32px 0 var(--shadow-lg), 0 1.5px 4px 0 rgba(0,0,0,0.15);
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 h1, h2, h3 {
-    color: #f9fafb;
+    color: var(--text-heading);
 }
 .summary-grid {
     display: grid;
@@ -157,17 +157,17 @@ h1, h2, h3 {
     margin-bottom: 24px;
 }
 .card {
-    background: #181f2f;
+    background: var(--bg-card);
     border-radius: 8px;
     padding: 12px 14px;
-    border: 1px solid #1f2937;
+    border: 1px solid var(--border);
     box-shadow: 0 1.5px 4px 0 #0002;
 }
 .card-title {
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #9ca3af;
+    color: var(--text-sub);
     margin-bottom: 4px;
 }
 .card-value {
@@ -179,7 +179,7 @@ table {
     border-collapse: collapse;
     margin-bottom: 24px;
     font-size: 0.95rem;
-    background: #101624;
+    background: var(--bg-table);
     border-radius: 8px;
     overflow: hidden;
     margin-left: auto;
@@ -188,16 +188,16 @@ table {
 }
 th, td {
     padding: 8px 10px;
-    border-bottom: 1px solid #1f2937;
+    border-bottom: 1px solid var(--border);
     text-align: center;
 }
 th {
-    background-color: #181f2f;
-    color: #d1d5db;
+    background-color: var(--bg-card);
+    color: var(--text-th);
     font-weight: 600;
 }
 tr:nth-child(even) td {
-    background-color: #0b1020;
+    background-color: var(--bg-row-even);
 }
 .badge {
     display: inline-block;
@@ -237,7 +237,7 @@ tr:nth-child(even) td {
 }
 .small {
     font-size: 0.9rem;
-    color: #9ca3af;
+    color: var(--text-sub);
 }
 .sparkline {
     font-family: 'Segoe UI Symbol', 'Segoe UI', system-ui, sans-serif;
@@ -247,9 +247,9 @@ tr:nth-child(even) td {
     text-align: center;
 }
 #playerSelect {
-    background: #181f2f;
-    color: #e5e7eb;
-    border: 1px solid #374151;
+    background: var(--bg-card);
+    color: var(--text);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 6px 12px;
     font-size: 1rem;
@@ -258,13 +258,19 @@ tr:nth-child(even) td {
 }
 label[for='playerSelect'] {
     font-size: 1rem;
-    color: #d1d5db;
+    color: var(--text-th);
     margin-right: 8px;
 }
 `;
                 document.head.appendChild(style);
             }
-            document.getElementById('dashboardContainer').innerHTML = `<div class='dashboard-root'><div id="playerDashboard"></div></div>`;
+            document.getElementById('dashboardContainer').innerHTML = `
+  <div style="margin-bottom:12px;" id="exportButtons">
+    <button id="saveImageBtn" class="apply-btn" style="margin-right:8px;">Save as Image</button>
+    <button id="savePdfBtn" class="apply-btn">Save as PDF</button>
+  </div>
+  <div class='dashboard-root'><div id="playerDashboard"></div></div>
+`;
 
 
             // Show floating Players and Courses buttons
@@ -747,6 +753,10 @@ label[for='playerSelect'] {
 
                 // Render charts
                 setTimeout(() => {
+                    const cs = getComputedStyle(document.documentElement);
+                    const chartTextSub = cs.getPropertyValue('--text-sub').trim() || '#9ca3af';
+                    const chartBorder = cs.getPropertyValue('--border').trim() || '#1f2937';
+                    const chartText = cs.getPropertyValue('--text').trim() || '#e5e7eb';
                     if (document.getElementById('ratingTrendChart')) {
                         new Chart(document.getElementById('ratingTrendChart').getContext('2d'), {
                             type: 'line',
@@ -777,11 +787,11 @@ label[for='playerSelect'] {
                             options: {
                                 responsive: true,
                                 scales: {
-                                    x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
-                                    y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+                                    x: { ticks: { color: chartTextSub }, grid: { color: chartBorder } },
+                                    y: { ticks: { color: chartTextSub }, grid: { color: chartBorder } }
                                 },
                                 plugins: {
-                                    legend: { labels: { color: '#e5e7eb' } }
+                                    legend: { labels: { color: chartText } }
                                 }
                             }
                         });
@@ -816,11 +826,11 @@ label[for='playerSelect'] {
                             options: {
                                 responsive: true,
                                 scales: {
-                                    x: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } },
-                                    y: { ticks: { color: '#9ca3af' }, grid: { color: '#1f2937' } }
+                                    x: { ticks: { color: chartTextSub }, grid: { color: chartBorder } },
+                                    y: { ticks: { color: chartTextSub }, grid: { color: chartBorder } }
                                 },
                                 plugins: {
-                                    legend: { labels: { color: '#e5e7eb' } }
+                                    legend: { labels: { color: chartText } }
                                 }
                             }
                         });
@@ -853,3 +863,104 @@ function downloadDashboardHtml() {
         URL.revokeObjectURL(url);
     }, 100);
 }
+
+// Export button handlers via event delegation (buttons are dynamically injected)
+document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'scorecardSaveImageBtn') {
+        const content = document.getElementById('scorecardContent');
+        if (!content) return;
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
+        html2canvas(content, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'scorecard.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+    if (e.target && e.target.id === 'scorecardSavePdfBtn') {
+        const content = document.getElementById('scorecardContent');
+        if (!content) return;
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
+        html2canvas(content, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+            const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'pt', format: 'a4'});
+            const margin = 16;
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = pageWidth - margin * 2;
+            const pageHeightInCanvas = Math.floor((pageHeight - margin * 2) * canvas.width / imgWidth);
+            const totalPages = Math.ceil(canvas.height / pageHeightInCanvas);
+            for (let page = 0; page < totalPages; page++) {
+                if (page > 0) pdf.addPage();
+                const sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = canvas.width;
+                const sliceStart = page * pageHeightInCanvas;
+                const sliceHeight = Math.min(pageHeightInCanvas, canvas.height - sliceStart);
+                sliceCanvas.height = sliceHeight;
+                const ctx = sliceCanvas.getContext('2d');
+                ctx.drawImage(canvas, 0, -sliceStart);
+                const sliceImgHeight = sliceHeight * imgWidth / canvas.width;
+                pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgWidth, sliceImgHeight);
+            }
+            pdf.save('scorecard.pdf');
+        });
+    }
+    if (e.target && e.target.id === 'saveImageBtn') {
+        const dash = document.querySelector('.dashboard-root');
+        if (!dash) return;
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim() || '#111827';
+        html2canvas(dash, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'dashboard.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+    if (e.target && e.target.id === 'savePdfBtn') {
+        const dash = document.querySelector('.dashboard-root');
+        if (!dash) return;
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim() || '#111827';
+        html2canvas(dash, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+            const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'pt', format: 'a4'});
+            const margin = 16;
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = pageWidth - margin * 2;
+            // How many canvas pixels fit in one PDF page (vertically)
+            const pageHeightInCanvas = Math.floor((pageHeight - margin * 2) * canvas.width / imgWidth);
+            const totalPages = Math.ceil(canvas.height / pageHeightInCanvas);
+            for (let page = 0; page < totalPages; page++) {
+                if (page > 0) pdf.addPage();
+                const sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = canvas.width;
+                const sliceStart = page * pageHeightInCanvas;
+                const sliceHeight = Math.min(pageHeightInCanvas, canvas.height - sliceStart);
+                sliceCanvas.height = sliceHeight;
+                const ctx = sliceCanvas.getContext('2d');
+                ctx.drawImage(canvas, 0, -sliceStart);
+                const sliceImgHeight = sliceHeight * imgWidth / canvas.width;
+                pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgWidth, sliceImgHeight);
+            }
+            pdf.save('dashboard.pdf');
+        });
+    }
+});
+
+// ===== Theme Management =====
+function setTheme(theme) {
+    localStorage.setItem('udisc-theme', theme);
+    if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+    } else if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+    }
+    document.querySelectorAll('.theme-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-theme-val') === theme);
+    });
+}
+// Apply saved (or system) theme immediately
+(function() {
+    var saved = localStorage.getItem('udisc-theme') || 'system';
+    setTheme(saved);
+})();

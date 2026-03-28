@@ -1,9 +1,14 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
  <html lang="en">
  <head>
      <meta charset="UTF-8">
      <meta name="viewport" content="width=device-width, initial-scale=1.0">
      <title>UDisc Round Dashboard Generator</title>
+     <script>(function(){
+         var t = localStorage.getItem('udisc-theme');
+         if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+         else if (t === 'light') document.documentElement.setAttribute('data-theme','light');
+     })();</script>
      <link rel="stylesheet" href="style.css">
  </head>
  <body>
@@ -13,6 +18,20 @@
         <label for="csvFile" class="visually-hidden">Upload CSV file</label>
         <input type="file" id="csvFile" accept=".csv" title="Upload CSV file">
         <button onclick="processFile()">Analyze File</button>
+        <div class="help-links">
+            <p>Need help exporting your UDisc scorecards?</p>
+            <a href="https://help.udisc.com/en/articles/10705081-how-can-i-export-my-scorecards-to-a-csv" target="_blank" rel="noopener noreferrer">How to Export Scorecards to CSV</a>
+            <p>Other Links</p>
+            <div class="social-links">
+                <a href="https://www.facebook.com/rich.brambley" target="_blank" rel="noopener noreferrer" title="Facebook">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="#60a5fa"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+                </a>
+                <a href="https://www.instagram.com/rbrambley" target="_blank" rel="noopener noreferrer" title="Instagram">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="#60a5fa"><path d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2zm0 1.5A4.25 4.25 0 0 0 3.5 7.75v8.5A4.25 4.25 0 0 0 7.75 20.5h8.5A4.25 4.25 0 0 0 20.5 16.25v-8.5A4.25 4.25 0 0 0 16.25 3.5h-8.5zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm5.25-.88a1.13 1.13 0 1 1 0 2.25 1.13 1.13 0 0 1 0-2.25z"/></svg>
+                </a>
+            </div>
+            <a href="https://joerobdiscs.com/discount/RICHB" target="_blank" rel="noopener noreferrer" class="promo-link">Free Shipping For Orders Over $25 at JoeRobDiscs.com</a>
+        </div>
     </div>
     <button id="openPlayerModal" class="floating-players-btn">Players</button>
     <button id="openCourseModal" class="floating-courses-btn">Courses</button>
@@ -37,11 +56,22 @@
     <div id="scorecardModal" class="modal">
         <div class="modal-content scorecard-modal-content">
             <span class="close" id="closeScorecardModal">&times;</span>
+            <div style="margin-bottom:10px;">
+                <button id="scorecardSaveImageBtn" class="apply-btn" style="margin-right:8px;">Save as Image</button>
+                <button id="scorecardSavePdfBtn" class="apply-btn">Save as PDF</button>
+            </div>
             <div id="scorecardContent"></div>
         </div>
     </div>
-     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="script.js"></script>
+    <div class="theme-toggle">
+        <button class="theme-btn" data-theme-val="system" onclick="setTheme('system')" title="Use system theme">Auto</button>
+        <button class="theme-btn" data-theme-val="light" onclick="setTheme('light')" title="Light theme">&#9728;</button>
+        <button class="theme-btn" data-theme-val="dark" onclick="setTheme('dark')" title="Dark theme">&#9790;</button>
+    </div>
  </body>
  </html>
