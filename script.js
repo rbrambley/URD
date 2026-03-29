@@ -549,28 +549,52 @@ label[for='playerSelect'] {
                 // Summary metrics
                 const totalRounds = validRounds.length;
                 // --- Throw Type Counts ---
-                let totalThrows = 0, aces = 0, birdies = 0, pars = 0, bogies = 0, dblBogies = 0, trpBogies = 0, other = 0;
+                let totalThrows = validRounds.reduce((sum, r) => sum + safeInt(r.Total), 0);
+                let aces = 0, birdies = 0, pars = 0, bogies = 0, dblBogies = 0, trpBogies = 0, other = 0;
+                let acesThrows = 0, birdiesThrows = 0, parsThrows = 0, bogiesThrows = 0, dblBogiesThrows = 0, trpBogiesThrows = 0, otherThrows = 0;
                 validRounds.forEach(r => {
                     // UDisc exports have hole-by-hole columns: Hole1, Hole2, ...
                     Object.keys(r).forEach(k => {
                         if (/^Hole\d+$/i.test(k) && r[k] !== '' && !isNaN(Number(r[k]))) {
                             const val = Number(r[k]);
                             if (val === 0) return; // skip holes not played
-                            totalThrows++;
                             // Use getParForHole utility
                             const par = getParForHole(r.CourseName, r.LayoutName, k.replace('Hole',''), window.allUDiscData || data) || 3;
                             const diff = val - par;
-                            if (val === 1) aces++;
-                            else if (diff === -1) birdies++;
-                            else if (diff === 0) pars++;
-                            else if (diff === 1) bogies++;
-                            else if (diff === 2) dblBogies++;
-                            else if (diff === 3) trpBogies++;
-                            else other++;
+                            if (val === 1) {
+                                aces++;
+                                acesThrows += val;
+                            }
+                            else if (diff === -1) {
+                                birdies++;
+                                birdiesThrows += val;
+                            }
+                            else if (diff === 0) {
+                                pars++;
+                                parsThrows += val;
+                            }
+                            else if (diff === 1) {
+                                bogies++;
+                                bogiesThrows += val;
+                            }
+                            else if (diff === 2) {
+                                dblBogies++;
+                                dblBogiesThrows += val;
+                            }
+                            else if (diff === 3) {
+                                trpBogies++;
+                                trpBogiesThrows += val;
+                            }
+                            else {
+                                other++;
+                                otherThrows += val;
+                            }
                         }
                     });
                 });
-                const pct = x => totalThrows > 0 ? ` | ${(100 * x / totalThrows).toFixed(1)}%` : '';
+                const totalOutcomes = aces + birdies + pars + bogies + dblBogies + trpBogies + other;
+                const outcomePct = x => totalOutcomes > 0 ? `${(100 * x / totalOutcomes).toFixed(1)}%` : '0.0%';
+                const throwPct = x => totalThrows > 0 ? `${(100 * x / totalThrows).toFixed(1)}%` : '0.0%';
                 const coursesPlayed = [...new Set(validRounds.map(r => r.CourseName))].length;
                 const scores = validRounds.map(r => safeInt(r.Total)).filter(x => x !== 0);
                 // Calculate to-par using per-hole par utility
@@ -618,13 +642,14 @@ label[for='playerSelect'] {
                 summaryHtml += `<div class='card'><div class='card-title'>Average Rating</div><div class='card-value'>${avgRating} | ${avgPDGA}</div></div>`;
                 // --- New Throw Summary Tiles ---
                 summaryHtml += `<div class='card'><div class='card-title'>Total Throws</div><div class='card-value'>${totalThrows}</div></div>`;
-                summaryHtml += `<div class='card'><div class='card-title'>Aces</div><div class='card-value'>${aces}${pct(aces)}</div></div>`;
-                summaryHtml += `<div class='card'><div class='card-title'>Birdies</div><div class='card-value'>${birdies}${pct(birdies)}</div></div>`;
-                summaryHtml += `<div class='card'><div class='card-title'>Pars</div><div class='card-value'>${pars}${pct(pars)}</div></div>`;
-                summaryHtml += `<div class='card'><div class='card-title'>Bogies</div><div class='card-value'>${bogies}${pct(bogies)}</div></div>`;
-                summaryHtml += `<div class='card'><div class='card-title'>Dbl Bogies</div><div class='card-value'>${dblBogies}${pct(dblBogies)}</div></div>`;
-                summaryHtml += `<div class='card'><div class='card-title'>Trp Bogies</div><div class='card-value'>${trpBogies}${pct(trpBogies)}</div></div>`;
-                summaryHtml += `<div class='card'><div class='card-title'>Other</div><div class='card-value'>${other}${pct(other)}</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Hole Outcomes</div><div class='card-value'>${totalOutcomes}</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Aces</div><div class='card-value'>${aces} (${outcomePct(aces)})</div><div class='small'>Throws: ${acesThrows} (${throwPct(acesThrows)})</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Birdies</div><div class='card-value'>${birdies} (${outcomePct(birdies)})</div><div class='small'>Throws: ${birdiesThrows} (${throwPct(birdiesThrows)})</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Pars</div><div class='card-value'>${pars} (${outcomePct(pars)})</div><div class='small'>Throws: ${parsThrows} (${throwPct(parsThrows)})</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Bogies</div><div class='card-value'>${bogies} (${outcomePct(bogies)})</div><div class='small'>Throws: ${bogiesThrows} (${throwPct(bogiesThrows)})</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Dbl Bogies</div><div class='card-value'>${dblBogies} (${outcomePct(dblBogies)})</div><div class='small'>Throws: ${dblBogiesThrows} (${throwPct(dblBogiesThrows)})</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Trp Bogies</div><div class='card-value'>${trpBogies} (${outcomePct(trpBogies)})</div><div class='small'>Throws: ${trpBogiesThrows} (${throwPct(trpBogiesThrows)})</div></div>`;
+                summaryHtml += `<div class='card'><div class='card-title'>Other</div><div class='card-value'>${other} (${outcomePct(other)})</div><div class='small'>Throws: ${otherThrows} (${throwPct(otherThrows)})</div></div>`;
                 summaryHtml += `</div>`;
 
                 // Recent performance table
