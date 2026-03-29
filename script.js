@@ -409,6 +409,8 @@ label[for='playerSelect'] {
             const closeScorecardModal = document.getElementById('closeScorecardModal');
             const coachModal = document.getElementById('coachModal');
             const closeCoachModal = document.getElementById('closeCoachModal');
+                        const aiCoachingPlanModal = document.getElementById('aiCoachingPlanModal');
+                        const closeAiCoachingPlanModal = document.getElementById('closeAiCoachingPlanModal');
             const coachContent = document.getElementById('coachContent');
             let lastDashboardSnapshot = null;
             let localCoachGenerator = null;
@@ -461,6 +463,9 @@ label[for='playerSelect'] {
             closeCoachModal.onclick = function() {
                 coachModal.style.display = 'none';
             };
+            closeAiCoachingPlanModal.onclick = function() {
+                aiCoachingPlanModal.style.display = 'none';
+            };
             applyDateBtn.onclick = function() {
                 selectedDateFilter.mode = getDatePresetValue();
                 selectedDateFilter.startDate = customStartDate.value || '';
@@ -480,6 +485,7 @@ label[for='playerSelect'] {
                 if (event.target === dateModal) dateModal.style.display = 'none';
                 if (event.target === scorecardModal) scorecardModal.style.display = 'none';
                 if (event.target === coachModal) coachModal.style.display = 'none';
+                            if (event.target === aiCoachingPlanModal) aiCoachingPlanModal.style.display = 'none';
             };
 
             function safeInt(val) {
@@ -545,6 +551,70 @@ label[for='playerSelect'] {
                 const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
                 const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
                 return Math.sqrt(variance);
+            }
+            function buildDashboardSnapshot(rounds, labels = {}) {
+                const validRounds = (rounds || []).filter(r => safeInt(r.Total) !== 0);
+                const totalRounds = validRounds.length;
+
+                let totalThrows = validRounds.reduce((sum, r) => sum + safeInt(r.Total), 0);
+                let aces = 0, birdies = 0, pars = 0, bogies = 0, dblBogies = 0, trpBogies = 0, other = 0;
+
+                validRounds.forEach(r => {
+                    Object.keys(r).forEach(k => {
+                        if (/^Hole\d+$/i.test(k) && r[k] !== '' && !isNaN(Number(r[k]))) {
+                            const val = Number(r[k]);
+                            if (val === 0) return;
+                            const par = getParForHole(r.CourseName, r.LayoutName, k.replace('Hole', ''), window.allUDiscData || data) || 3;
+                            const diff = val - par;
+                            if (val === 1) aces++;
+                            else if (diff === -1) birdies++;
+                            else if (diff === 0) pars++;
+                            else if (diff === 1) bogies++;
+                            else if (diff === 2) dblBogies++;
+                            else if (diff === 3) trpBogies++;
+                            else other++;
+                        }
+                    });
+                });
+
+                const scores = validRounds.map(r => safeInt(r.Total)).filter(x => x !== 0);
+                const toPars = validRounds.map(r => {
+                    let sum = 0, holes = 0;
+                    Object.keys(r).forEach(k => {
+                        const m = k.match(/^Hole(\d+)$/i);
+                        if (m && r[k] !== '' && !isNaN(Number(r[k]))) {
+                            const val = Number(r[k]);
+                            if (val === 0) return;
+                            const par = getParForHole(r.CourseName, r.LayoutName, m[1], window.allUDiscData || data) || 3;
+                            sum += val - par;
+                            holes++;
+                        }
+                    });
+                    return holes > 0 ? sum : 0;
+                });
+
+                const recent = validRounds.slice(0, 10);
+                const previousTen = validRounds.slice(10, 20);
+                const riskOutcomeCount = bogies + dblBogies + trpBogies + other;
+                const totalOutcomeCount = aces + birdies + pars + riskOutcomeCount;
+
+                return {
+                    playerLabel: labels.playerLabel || '',
+                    courseLabel: labels.courseLabel || '',
+                    dateLabel: labels.dateLabel || '',
+                    totalRounds,
+                    avgScore: scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length) : 0,
+                    avgToPar: toPars.length > 0 ? (toPars.reduce((a, b) => a + b, 0) / toPars.length) : 0,
+                    totalThrows,
+                    totalOutcomes: aces + birdies + pars + bogies + dblBogies + trpBogies + other,
+                    riskOutcomeRate: totalOutcomeCount > 0 ? (riskOutcomeCount / totalOutcomeCount) : 0,
+                    riskOutcomeRatePct: totalOutcomeCount > 0 ? ((100 * riskOutcomeCount / totalOutcomeCount).toFixed(1)) : '0.0',
+                    birdieRate: totalOutcomeCount > 0 ? (birdies / totalOutcomeCount) : 0,
+                    birdieRatePct: totalOutcomeCount > 0 ? ((100 * birdies / totalOutcomeCount).toFixed(1)) : '0.0',
+                    toParStdDev: calcStdDev(toPars),
+                    recentTenAvgToPar: recent.length > 0 ? (recent.map(r => safeInt(r['+/-'])).reduce((a, b) => a + b, 0) / recent.length) : 0,
+                    previousTenAvgToPar: previousTen.length > 0 ? (previousTen.map(r => safeInt(r['+/-'])).reduce((a, b) => a + b, 0) / previousTen.length) : null
+                };
             }
             const coachDrillLibrary = [
                 { id: 'safe-landing-round', title: 'Safe Landing Round', tags: ['risk-control', 'course-management'], minutes: '1 round', detail: 'Play one round choosing conservative landing zones on every tee shot.' },
@@ -1612,32 +1682,11 @@ label[for='playerSelect'] {
 
                 // Recent 10 rounds (most recent)
                 const recent = validRounds.slice(0, 10);
-                const riskOutcomeCount = bogies + dblBogies + trpBogies + other;
-                const totalOutcomeCount = aces + birdies + pars + riskOutcomeCount;
-                const recentTenAvgToPar = recent.length > 0
-                    ? (recent.map(r => safeInt(r['+/-'])).reduce((a, b) => a + b, 0) / recent.length)
-                    : 0;
-                const previousTen = validRounds.slice(10, 20);
-                const previousTenAvgToPar = previousTen.length > 0
-                    ? (previousTen.map(r => safeInt(r['+/-'])).reduce((a, b) => a + b, 0) / previousTen.length)
-                    : null;
-                lastDashboardSnapshot = {
+                lastDashboardSnapshot = buildDashboardSnapshot(validRounds, {
                     playerLabel: selected.join(', '),
                     courseLabel: selectedC.length === allCourses.length ? 'All' : selectedC.join(', '),
-                    dateLabel: getDateFilterLabel(dateFilter),
-                    totalRounds,
-                    avgScore,
-                    avgToPar,
-                    totalThrows,
-                    totalOutcomes,
-                    riskOutcomeRate: totalOutcomeCount > 0 ? (riskOutcomeCount / totalOutcomeCount) : 0,
-                    riskOutcomeRatePct: totalOutcomeCount > 0 ? ((100 * riskOutcomeCount / totalOutcomeCount).toFixed(1)) : '0.0',
-                    birdieRate: totalOutcomeCount > 0 ? (birdies / totalOutcomeCount) : 0,
-                    birdieRatePct: totalOutcomeCount > 0 ? ((100 * birdies / totalOutcomeCount).toFixed(1)) : '0.0',
-                    toParStdDev: calcStdDev(toPars),
-                    recentTenAvgToPar,
-                    previousTenAvgToPar
-                };
+                    dateLabel: getDateFilterLabel(dateFilter)
+                });
 
                 // Summary cards HTML
                 let summaryHtml = `<div class='small'>Player(s): <strong>${selected.join(', ')}</strong> &nbsp;•&nbsp; Course(s): <strong>${selectedC.length === allCourses.length ? 'All' : selectedC.join(', ')}</strong> &nbsp;•&nbsp; Date: <strong>${getDateFilterLabel(dateFilter)}</strong> &nbsp;•&nbsp; Source: UDisc Scorecards Export (Summary)</div>`;
@@ -1747,6 +1796,77 @@ label[for='playerSelect'] {
 
                 // Scorecard rendering function (to be implemented)
                 function renderScorecardModal(courseName, rounds) {
+                    const constraints = getCoachConstraints();
+                    const layoutPlanContext = {};
+
+                    function buildScorecardHolePlanHtml(ctx) {
+                        const snapshot = buildDashboardSnapshot(ctx.selectedGroup, {
+                            playerLabel: (lastDashboardSnapshot && lastDashboardSnapshot.playerLabel) ? lastDashboardSnapshot.playerLabel : '',
+                            courseLabel: ctx.courseName,
+                            dateLabel: (lastDashboardSnapshot && lastDashboardSnapshot.dateLabel) ? lastDashboardSnapshot.dateLabel : ''
+                        });
+                        const attackPlan = buildLocalCoachPlan(snapshot, constraints);
+                        const primaryFocus = attackPlan.focuses && attackPlan.focuses[0] ? attackPlan.focuses[0] : null;
+
+                        const holeRows = ctx.holeNums.map(h => {
+                            const par = ctx.parByHole[h];
+                            const avg = ctx.avgByHole[h];
+                            const avgDisplay = avg !== '' ? avg.toFixed(2) : 'N/A';
+                            const hasPar = typeof par === 'number';
+                            const diff = (avg !== '' && hasPar) ? (avg - par) : null;
+
+                            let lineCall = 'Play neutral: commit to your stock line and trust the putt.';
+                            let target = hasPar ? `Par floor.` : 'Clean execution.';
+                            if (ctx.worstHoles.includes(h) || (diff !== null && diff >= 0.8)) {
+                                lineCall = 'Damage-control hole: choose the widest landing zone and avoid OB/early tree kicks.';
+                                target = hasPar ? `Take a clean ${par} and avoid worse.` : 'Avoid compounding mistakes.';
+                            } else if (ctx.bestHoles.includes(h) || (diff !== null && diff <= -0.4)) {
+                                lineCall = 'Green-light hole: attack your highest-confidence birdie line.';
+                                target = hasPar ? `${par - 1 > 1 ? `${par - 1}` : 'Birdie'} look, with par as fallback.` : 'Create birdie pressure.';
+                            } else if (diff !== null && diff > 0.2) {
+                                lineCall = 'Par-save hole: favor placement over distance and keep your next shot unobstructed.';
+                                target = hasPar ? `Par first, birdie only if first shot is perfect.` : 'Position over aggression.';
+                            }
+
+                            return `<tr><td>H${h}</td><td>${par}</td><td>${avgDisplay}</td><td class='left-align-col'>${lineCall}</td><td class='left-align-col'>${target}</td></tr>`;
+                        }).join('');
+
+                        // ── Scorecard grid (same style as the Scorecard modal) ──
+                        let html = `<div class='scorecard-title'><b>${ctx.courseName}</b> — <span class='scorecard-layout'>${ctx.layout}</span> <span class='scorecard-played'>(${snapshot.totalRounds} played)</span></div>`;
+                        for (let i = 0; i < ctx.holeNums.length; i += 9) {
+                            const holes = ctx.holeNums.slice(i, i + 9);
+                            html += `<table class='scorecard-table'><tbody>`;
+                            html += '<tr>';
+                            holes.forEach(h => { html += `<th>H${h}</th>`; });
+                            html += '</tr><tr>';
+                            holes.forEach(h => { html += `<td class='scorecard-par'>${ctx.parByHole[h]}</td>`; });
+                            html += '</tr><tr>';
+                            holes.forEach(h => {
+                                let cls = 'scorecard-avg';
+                                if (ctx.bestHoles.includes(h)) cls += ' scorecard-best';
+                                if (ctx.worstHoles.includes(h)) cls += ' scorecard-worst';
+                                html += `<td class='${cls}'>${ctx.avgByHole[h] !== '' ? ctx.avgByHole[h].toFixed(2) : ''}</td>`;
+                            });
+                            html += '</tr></tbody></table>';
+                        }
+
+                        // ── AI coaching card ──
+                        html += `<div class='card scorecard-ai-plan-card'>`;
+                        html += `<div class='card-title'>AI Coaching: Hole-by-Hole Plan</div>`;
+                        html += `<div class='small'>Course: <strong>${ctx.courseName}</strong> • Layout: <strong>${ctx.layout}</strong> • Rounds in scope: <strong>${snapshot.totalRounds}</strong></div>`;
+                        html += `<div class='scorecard-attack-pills'>`;
+                        html += `<span class='coach-profile-pill'>Archetype: ${attackPlan.archetype}</span>`;
+                        html += `<span class='coach-profile-pill'>Birdie: ${snapshot.birdieRatePct}%</span>`;
+                        html += `<span class='coach-profile-pill'>Risk: ${snapshot.riskOutcomeRatePct}%</span>`;
+                        html += `</div>`;
+                        if (primaryFocus) {
+                            html += `<div class='small'><strong>Primary Focus:</strong> ${primaryFocus.title} ${primaryFocus.why}</div>`;
+                        }
+                        html += `<table class='scorecard-ai-table'><thead><tr><th>Hole</th><th>Par</th><th>Avg</th><th class='left-align-col'>AI Line</th><th class='left-align-col'>Target</th></tr></thead><tbody>${holeRows}</tbody></table>`;
+                        html += `</div>`;
+                        return html;
+                    }
+
                     // Always use the full data set to find the Par row for each layout
                     const allData = window.allUDiscData || data;
                     const allCourseRounds = allData.filter(r => r.CourseName === courseName);
@@ -1811,7 +1931,9 @@ label[for='playerSelect'] {
                         const bestHoles = avgArr.slice(0, 3).map(x => x.h);
                         const worstHoles = avgArr.slice(-3).map(x => x.h);
                         // Build table: for each group of 9 holes, show 3 rows (Hole No, Par, Avg)
+                        const layoutKey = btoa(encodeURIComponent(`${courseName}|${layout}`)).replace(/[^a-zA-Z0-9]/g, '');
                         let table = `<div class='scorecard-title'><b>${courseName}</b> — <span class='scorecard-layout'>${layout}</span> <span class='scorecard-played'>(${group.length} played)</span></div>`;
+                        table += `<div class='small'><a href='#' class='scorecard-ai-link' data-layout-key='${layoutKey}'>AI Coaching Plan</a></div>`;
                         for (let i = 0; i < holeNums.length; i += 9) {
                             const holes = holeNums.slice(i, i + 9);
                             table += `<table class='scorecard-table'><tbody>`;
@@ -1834,10 +1956,38 @@ label[for='playerSelect'] {
                             table += '</tr>';
                             table += '</tbody></table>';
                         }
+                        layoutPlanContext[layoutKey] = {
+                            courseName,
+                            layout,
+                            selectedGroup,
+                            holeNums,
+                            parByHole,
+                            avgByHole,
+                            bestHoles,
+                            worstHoles
+                        };
+
                         html += `<div class='scorecard-block'>${table}</div>`;
                     });
                     document.getElementById('scorecardContent').innerHTML = html;
                     scorecardModal.style.display = 'flex';
+
+                    document.querySelectorAll('.scorecard-ai-link').forEach(link => {
+                        link.onclick = function(evt) {
+                            evt.preventDefault();
+                            const layoutKey = this.getAttribute('data-layout-key');
+                            const ctx = layoutPlanContext[layoutKey];
+                            if (!ctx) return;
+                            if (!aiCoachingPlanModal) return;
+                            const planContent = document.getElementById('aiCoachingPlanContent');
+                            if (!planContent) return;
+                            planContent.innerHTML = `<div class='small scorecard-ai-generating'>Generating AI Coaching Plan...</div>`;
+                            aiCoachingPlanModal.style.display = 'flex';
+                            setTimeout(() => {
+                                planContent.innerHTML = buildScorecardHolePlanHtml(ctx);
+                            }, 10);
+                        };
+                    });
 
                     // Helper: mode (most common value)
                     function mode(arr) {
@@ -2102,6 +2252,48 @@ document.addEventListener('click', function(e) {
         });
     }
     const imageTrigger = e.target.closest('#saveImageBtn');
+        const aiPlanImageTrigger = e.target.closest('#aiCoachingPlanSaveImageBtn');
+        if (aiPlanImageTrigger) {
+            e.preventDefault();
+            const content = document.getElementById('aiCoachingPlanContent');
+            if (!content) return;
+            const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
+            html2canvas(content, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'ai-coaching-plan.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+        const aiPlanPdfTrigger = e.target.closest('#aiCoachingPlanSavePdfBtn');
+        if (aiPlanPdfTrigger) {
+            e.preventDefault();
+            const content = document.getElementById('aiCoachingPlanContent');
+            if (!content) return;
+            const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
+            html2canvas(content, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+                const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'pt', format: 'a4'});
+                const margin = 16;
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const imgWidth = pageWidth - margin * 2;
+                const pageHeightInCanvas = Math.floor((pageHeight - margin * 2) * canvas.width / imgWidth);
+                const totalPages = Math.ceil(canvas.height / pageHeightInCanvas);
+                for (let page = 0; page < totalPages; page++) {
+                    if (page > 0) pdf.addPage();
+                    const sliceCanvas = document.createElement('canvas');
+                    sliceCanvas.width = canvas.width;
+                    const sliceStart = page * pageHeightInCanvas;
+                    const sliceHeight = Math.min(pageHeightInCanvas, canvas.height - sliceStart);
+                    sliceCanvas.height = sliceHeight;
+                    const ctx = sliceCanvas.getContext('2d');
+                    ctx.drawImage(canvas, 0, -sliceStart);
+                    const sliceImgHeight = sliceHeight * imgWidth / canvas.width;
+                    pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgWidth, sliceImgHeight);
+                }
+                pdf.save('ai-coaching-plan.pdf');
+            });
+        }
     if (imageTrigger) {
         e.preventDefault();
         const dash = document.querySelector('.dashboard-root');

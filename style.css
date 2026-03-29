@@ -264,6 +264,34 @@ html[data-theme="light"] {
 .scorecard-block {
     margin-bottom: 36px;
 }
+.scorecard-attack-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+.scorecard-ai-link {
+    color: var(--accent);
+    text-decoration: underline;
+    font-weight: 600;
+}
+.scorecard-ai-link:hover {
+    color: var(--accent-hover);
+}
+.scorecard-ai-plan {
+    margin-top: 12px;
+}
+.scorecard-ai-plan-card {
+    margin-top: 0;
+}
+.scorecard-ai-table {
+    width: 100%;
+    margin-top: 10px;
+}
+.scorecard-ai-table td.left-align-col,
+.scorecard-ai-table th.left-align-col {
+    text-align: left;
+}
 /* Help Links on Upload Page */
 .help-links {
     margin-top: 20px;
