@@ -286,6 +286,8 @@ label[for='playerSelect'] {
             openPlayerBtn.style.display = 'block';
             const openCourseBtn = document.getElementById('openCourseModal');
             openCourseBtn.style.display = 'block';
+            const openDateBtn = document.getElementById('openDateModal');
+            openDateBtn.style.display = 'block';
 
 
             // Player modal logic
@@ -346,6 +348,11 @@ label[for='playerSelect'] {
             // Get all unique courses from data
             const allCourses = Array.from(new Set(data.map(r => r.CourseName).filter(Boolean))).sort();
             let selectedCourses = [...allCourses]; // All selected by default
+            let selectedDateFilter = {
+                mode: 'all',
+                startDate: '',
+                endDate: ''
+            };
 
             function renderCourseCheckboxes() {
                 courseCheckboxList.innerHTML = '';
@@ -390,10 +397,62 @@ label[for='playerSelect'] {
                 renderPlayerDashboard(selectedPlayers, selectedCourses);
             };
 
+            // --- Date modal logic ---
+            const dateModal = document.getElementById('dateModal');
+            const closeDateModal = document.getElementById('closeDateModal');
+            const applyDateBtn = document.getElementById('applyDateSelection');
+            const dateCustomInputs = document.getElementById('dateCustomInputs');
+            const customStartDate = document.getElementById('customStartDate');
+            const customEndDate = document.getElementById('customEndDate');
+            const scorecardModal = document.getElementById('scorecardModal');
+            const closeScorecardModal = document.getElementById('closeScorecardModal');
+
+            function getDatePresetValue() {
+                const checked = document.querySelector('input[name="datePreset"]:checked');
+                return checked ? checked.value : 'all';
+            }
+
+            function updateDateCustomVisibility() {
+                const mode = getDatePresetValue();
+                dateCustomInputs.style.display = mode === 'custom' ? 'flex' : 'none';
+            }
+
+            function syncDateModalFromState() {
+                const preset = document.querySelector(`input[name="datePreset"][value="${selectedDateFilter.mode}"]`) || document.querySelector('input[name="datePreset"][value="all"]');
+                if (preset) preset.checked = true;
+                customStartDate.value = selectedDateFilter.startDate || '';
+                customEndDate.value = selectedDateFilter.endDate || '';
+                updateDateCustomVisibility();
+            }
+
+            openDateBtn.onclick = function() {
+                syncDateModalFromState();
+                dateModal.style.display = 'flex';
+            };
+            closeDateModal.onclick = function() {
+                dateModal.style.display = 'none';
+            };
+            closeScorecardModal.onclick = function() {
+                scorecardModal.style.display = 'none';
+            };
+            applyDateBtn.onclick = function() {
+                selectedDateFilter.mode = getDatePresetValue();
+                selectedDateFilter.startDate = customStartDate.value || '';
+                selectedDateFilter.endDate = customEndDate.value || '';
+                dateModal.style.display = 'none';
+                renderPlayerDashboard(selectedPlayers, selectedCourses, selectedDateFilter);
+            };
+
+            document.querySelectorAll('input[name="datePreset"]').forEach(radio => {
+                radio.addEventListener('change', updateDateCustomVisibility);
+            });
+
             // Close modals on outside click
             window.onclick = function(event) {
                 if (event.target === playerModal) playerModal.style.display = 'none';
                 if (event.target === courseModal) courseModal.style.display = 'none';
+                if (event.target === dateModal) dateModal.style.display = 'none';
+                if (event.target === scorecardModal) scorecardModal.style.display = 'none';
             };
 
             function safeInt(val) {
@@ -404,6 +463,50 @@ label[for='playerSelect'] {
                 const n = parseFloat(val);
                 return isNaN(n) ? 0 : n;
             }
+            function parseRoundDate(row) {
+                let d = row.Date || row.StartDate || '';
+                if (typeof d !== 'string' || !d.trim()) return new Date('');
+                if (/\d{4}-\d{2}-\d{2} \d{4}/.test(d)) {
+                    d = d.replace(/(\d{4}-\d{2}-\d{2}) (\d{2})(\d{2})/, '$1T$2:$3');
+                }
+                return new Date(d);
+            }
+            function getDateFilterBounds(filter) {
+                if (!filter || filter.mode === 'all') return null;
+                const now = new Date();
+                const end = new Date(now);
+                end.setHours(23, 59, 59, 999);
+
+                if (filter.mode === 'lastWeek') {
+                    const start = new Date(now);
+                    start.setDate(start.getDate() - 7);
+                    start.setHours(0, 0, 0, 0);
+                    return { start, end };
+                }
+                if (filter.mode === 'lastMonth') {
+                    const start = new Date(now);
+                    start.setDate(start.getDate() - 30);
+                    start.setHours(0, 0, 0, 0);
+                    return { start, end };
+                }
+                if (filter.mode === 'custom') {
+                    const start = filter.startDate ? new Date(`${filter.startDate}T00:00:00`) : null;
+                    const customEnd = filter.endDate ? new Date(`${filter.endDate}T23:59:59.999`) : null;
+                    return { start, end: customEnd };
+                }
+                return null;
+            }
+            function getDateFilterLabel(filter) {
+                if (!filter || filter.mode === 'all') return 'All Dates';
+                if (filter.mode === 'lastWeek') return 'Last Week';
+                if (filter.mode === 'lastMonth') return 'Last Month';
+                if (filter.mode === 'custom') {
+                    const start = filter.startDate || 'Any';
+                    const end = filter.endDate || 'Any';
+                    return `${start} to ${end}`;
+                }
+                return 'All Dates';
+            }
             function getQuality(tp) {
                 if (tp <= -3) return 'excellent';
                 if (tp <= 1) return 'solid';
@@ -413,7 +516,7 @@ label[for='playerSelect'] {
 
 
             // Accepts array of selected players and array of selected courses
-            function renderPlayerDashboard(selectedPlayers, selectedCourses) {
+            function renderPlayerDashboard(selectedPlayers, selectedCourses, dateFilter = selectedDateFilter) {
                 let selected = Array.isArray(selectedPlayers) ? selectedPlayers : [selectedPlayers];
                 let selectedC = Array.isArray(selectedCourses) ? selectedCourses : [selectedCourses];
                 // Find all merged player groups
@@ -425,20 +528,23 @@ label[for='playerSelect'] {
                 if (selectedC.length > 0) {
                     playerRounds = playerRounds.filter(row => selectedC.includes(row.CourseName));
                 }
+                const dateBounds = getDateFilterBounds(dateFilter);
+                if (dateBounds) {
+                    playerRounds = playerRounds.filter(row => {
+                        const dt = parseRoundDate(row);
+                        if (isNaN(dt.getTime())) return false;
+                        if (dateBounds.start && dt < dateBounds.start) return false;
+                        if (dateBounds.end && dt > dateBounds.end) return false;
+                        return true;
+                    });
+                }
                 // Remove rounds with Score = 0
                 const validRounds = playerRounds.filter(r => safeInt(r.Total) !== 0);
                 const removedRounds = playerRounds.filter(r => safeInt(r.Total) === 0);
 
                 // Sort validRounds by date descending (most recent first)
-                function parseDate(row) {
-                    let d = row.Date || row.StartDate || '';
-                    if (/\d{4}-\d{2}-\d{2} \d{4}/.test(d)) {
-                        d = d.replace(/(\d{4}-\d{2}-\d{2}) (\d{2})(\d{2})/, '$1T$2:$3');
-                    }
-                    return new Date(d);
-                }
-                validRounds.sort((a, b) => parseDate(b) - parseDate(a));
-                removedRounds.sort((a, b) => parseDate(b) - parseDate(a));
+                validRounds.sort((a, b) => parseRoundDate(b) - parseRoundDate(a));
+                removedRounds.sort((a, b) => parseRoundDate(b) - parseRoundDate(a));
 
                 // Summary metrics
                 const totalRounds = validRounds.length;
@@ -499,7 +605,7 @@ label[for='playerSelect'] {
                 const recent = validRounds.slice(0, 10);
 
                 // Summary cards HTML
-                let summaryHtml = `<div class='small'>Player(s): <strong>${selected.join(', ')}</strong> &nbsp;•&nbsp; Course(s): <strong>${selectedC.length === allCourses.length ? 'All' : selectedC.join(', ')}</strong> &nbsp;•&nbsp; Source: UDisc Scorecards Export (Summary)</div>`;
+                let summaryHtml = `<div class='small'>Player(s): <strong>${selected.join(', ')}</strong> &nbsp;•&nbsp; Course(s): <strong>${selectedC.length === allCourses.length ? 'All' : selectedC.join(', ')}</strong> &nbsp;•&nbsp; Date: <strong>${getDateFilterLabel(dateFilter)}</strong> &nbsp;•&nbsp; Source: UDisc Scorecards Export (Summary)</div>`;
                 summaryHtml += `<div class='summary-grid'>`;
                 summaryHtml += `<div class='card'><div class='card-title'>Total Rounds</div><div class='card-value'>${totalRounds}</div></div>`;
                 summaryHtml += `<div class='card'><div class='card-title'>Courses Played</div><div class='card-value'>${coursesPlayed}</div></div>`;
@@ -594,14 +700,6 @@ label[for='playerSelect'] {
                 });
                 courseHtml += `</tbody></table>`;
                 // Scorecard modal logic
-                const scorecardModal = document.getElementById('scorecardModal');
-                const closeScorecardModal = document.getElementById('closeScorecardModal');
-                closeScorecardModal.onclick = function() {
-                    scorecardModal.style.display = 'none';
-                };
-                window.onclick = function(event) {
-                    if (event.target === scorecardModal) scorecardModal.style.display = 'none';
-                };
                 setTimeout(() => {
                     document.querySelectorAll('.scorecard-btn').forEach(btn => {
                         btn.onclick = function() {

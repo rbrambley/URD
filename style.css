@@ -357,20 +357,40 @@ html[data-theme="light"] {
 /* Floating Courses Button */
 .floating-courses-btn {
     position: fixed;
-    top: 24px;
-    right: 160px;
+    top: 60px;
+    right: 32px;
     z-index: 2001;
     background: var(--bg-elevated);
     color: var(--text);
     border: none;
     border-radius: 6px;
-    padding: 10px 18px;
-    font-size: 1rem;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    line-height: 1.1;
     cursor: pointer;
     box-shadow: 0 2px 8px #0003;
     display: none;
 }
 .floating-courses-btn.show {
+    display: block;
+}
+.floating-date-btn {
+    position: fixed;
+    top: 96px;
+    right: 32px;
+    z-index: 2001;
+    background: var(--bg-elevated);
+    color: var(--text);
+    border: none;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    line-height: 1.1;
+    cursor: pointer;
+    box-shadow: 0 2px 8px #0003;
+    display: none;
+}
+.floating-date-btn.show {
     display: block;
 }
 /* Left-align Course column in all tables */
@@ -391,14 +411,21 @@ th.left-align-col, td.left-align-col {
     color: var(--text);
     border: none;
     border-radius: 6px;
-    padding: 10px 18px;
-    font-size: 1rem;
+    padding: 6px 8px;
+    font-size: 0.85rem;
+    line-height: 1.1;
     cursor: pointer;
     box-shadow: 0 2px 8px #0003;
     display: none;
 }
 .floating-players-btn.show {
     display: block;
+}
+.floating-players-btn,
+.floating-courses-btn,
+.floating-date-btn {
+    width: 74px;
+    text-align: center;
 }
 
 /* Modal Styles */
@@ -474,6 +501,30 @@ th.left-align-col, td.left-align-col {
 }
 .selector-action-link:hover {
     color: var(--accent-hover);
+}
+.date-filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 10px 0 14px 0;
+}
+.date-filter-options label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.date-custom-inputs {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    margin: 4px 0 10px 0;
+}
+.date-custom-inputs input[type="date"] {
+    background: var(--bg-elevated);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
 }
 .apply-btn {
     background: #4CAF50;
@@ -639,14 +690,25 @@ th.left-align-col, td.left-align-col {
     .floating-players-btn {
         right: 4vw !important;
         top: 8px !important;
-        padding: 7px 10px;
-        font-size: 0.8rem;
+        padding: 5px 6px;
+        font-size: 0.75rem;
     }
     .floating-courses-btn {
-        right: 24vw !important;
-        top: 8px !important;
-        padding: 7px 10px;
-        font-size: 0.8rem;
+        right: 4vw !important;
+        top: 34px !important;
+        padding: 5px 6px;
+        font-size: 0.75rem;
+    }
+    .floating-date-btn {
+        right: 4vw !important;
+        top: 60px !important;
+        padding: 5px 6px;
+        font-size: 0.75rem;
+    }
+    .floating-players-btn,
+    .floating-courses-btn,
+    .floating-date-btn {
+        width: 64px;
     }
     .section-title {
         font-size: 1rem;

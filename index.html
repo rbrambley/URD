@@ -38,6 +38,7 @@
     </div>
     <button id="openPlayerModal" class="floating-players-btn">Players</button>
     <button id="openCourseModal" class="floating-courses-btn">Courses</button>
+    <button id="openDateModal" class="floating-date-btn">Dates</button>
     <div id="playerModal" class="modal">
         <div class="modal-content">
             <span class="close" id="closePlayerModal">&times;</span>
@@ -52,6 +53,25 @@
             <h2>Select Courses</h2>
             <div id="courseRadioList" class="player-checkbox-list"></div>
             <button id="applyCourseSelection" class="apply-btn">Apply</button>
+        </div>
+    </div>
+    <div id="dateModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeDateModal">&times;</span>
+            <h2>Select Date Range</h2>
+            <div id="dateFilterOptions" class="date-filter-options">
+                <label><input type="radio" name="datePreset" value="all" checked> All Dates</label>
+                <label><input type="radio" name="datePreset" value="lastWeek"> Last Week</label>
+                <label><input type="radio" name="datePreset" value="lastMonth"> Last Month</label>
+                <label><input type="radio" name="datePreset" value="custom"> Custom Range</label>
+            </div>
+            <div class="date-custom-inputs" id="dateCustomInputs">
+                <label for="customStartDate">Start date</label>
+                <input type="date" id="customStartDate">
+                <label for="customEndDate">End date</label>
+                <input type="date" id="customEndDate">
+            </div>
+            <button id="applyDateSelection" class="apply-btn">Apply</button>
         </div>
     </div>
     <div id="dashboardContainer"></div>
