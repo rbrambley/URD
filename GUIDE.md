@@ -6,10 +6,11 @@ Turn your UDisc scorecard export into a full performance dashboard with hole-by-
 
 ## Step 1 — Export Your UDisc Scorecards
 
-1. Open the UDisc app on your phone.
-2. Go to **Profile → Scorecards**.
-3. Tap the export/share icon and choose **Export to CSV**.
-4. Save the `.csv` file somewhere easy to find.
+1. Open the UDisc app and make sure you are signed into the account you want to export.
+2. Tap the **You** tab in the bottom navigation.
+3. Tap the **menu (☰)** in the top-right, then select **Rounds**.
+4. In the Rounds screen, tap the **menu (☰)** again and choose **Export to CSV**.
+5. Save the downloaded `.csv` file somewhere easy to find.
 
 > Need help? [How to export your UDisc scorecards to CSV](https://help.udisc.com/en/articles/10705081-how-can-i-export-my-scorecards-to-a-csv)
 
