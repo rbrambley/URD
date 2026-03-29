@@ -18,7 +18,7 @@ Turn your UDisc scorecard export into a full performance dashboard with hole-by-
 
 ## Step 2 — Load Your Data
 
-1. Open `index.html` in your browser (or visit the hosted URL if shared with you).
+1. Open your browser and go to **https://rbrambley.github.io/URD/**.
 2. Click **Choose CSV File** and select the file you exported.
 3. Click **Analyze File**.
 
