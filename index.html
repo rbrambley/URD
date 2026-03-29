@@ -30,7 +30,10 @@
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="#60a5fa"><path d="M7.75 2h8.5A5.75 5.75 0 0 1 22 7.75v8.5A5.75 5.75 0 0 1 16.25 22h-8.5A5.75 5.75 0 0 1 2 16.25v-8.5A5.75 5.75 0 0 1 7.75 2zm0 1.5A4.25 4.25 0 0 0 3.5 7.75v8.5A4.25 4.25 0 0 0 7.75 20.5h8.5A4.25 4.25 0 0 0 20.5 16.25v-8.5A4.25 4.25 0 0 0 16.25 3.5h-8.5zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 1.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm5.25-.88a1.13 1.13 0 1 1 0 2.25 1.13 1.13 0 0 1 0-2.25z"/></svg>
                 </a>
             </div>
-            <a href="https://joerobdiscs.com/discount/RICHB" target="_blank" rel="noopener noreferrer" class="promo-link">Free Shipping For Orders Over $25 at JoeRobDiscs.com</a>
+            <a href="https://joerobdiscs.com/discount/RICHB" target="_blank" rel="noopener noreferrer" class="promo-link upload-promo-link">
+                <img src="https://joerobdiscs.com/cdn/shop/files/JRDG_Name_Logo_Joe_f24f21e2-4c03-4fa2-83c5-e34d9da1f39b.png?v=1761072560" alt="JoeRob Discs" class="upload-promo-logo">
+                <span>Free Shipping For Orders Over $25 at JoeRobDiscs.com</span>
+            </a>
         </div>
     </div>
     <button id="openPlayerModal" class="floating-players-btn">Players</button>
@@ -56,9 +59,9 @@
     <div id="scorecardModal" class="modal">
         <div class="modal-content scorecard-modal-content">
             <span class="close" id="closeScorecardModal">&times;</span>
-            <div style="margin-bottom:10px;">
-                <button id="scorecardSaveImageBtn" class="apply-btn" style="margin-right:8px;">Save as Image</button>
-                <button id="scorecardSavePdfBtn" class="apply-btn">Save as PDF</button>
+            <div class="export-links export-links--modal">
+                <a id="scorecardSaveImageBtn" href="#" class="export-link">Save as Image</a>
+                <a id="scorecardSavePdfBtn" href="#" class="export-link">Save as PDF</a>
             </div>
             <div id="scorecardContent"></div>
         </div>

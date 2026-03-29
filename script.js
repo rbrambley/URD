@@ -265,11 +265,19 @@ label[for='playerSelect'] {
                 document.head.appendChild(style);
             }
             document.getElementById('dashboardContainer').innerHTML = `
-  <div style="margin-bottom:12px;" id="exportButtons">
-    <button id="saveImageBtn" class="apply-btn" style="margin-right:8px;">Save as Image</button>
-    <button id="savePdfBtn" class="apply-btn">Save as PDF</button>
+    <div id="exportButtons" class="export-links export-links--dashboard">
+        <a id="saveImageBtn" href="#" class="export-link">Save as Image</a>
+        <a id="savePdfBtn" href="#" class="export-link">Save as PDF</a>
   </div>
-  <div class='dashboard-root'><div id="playerDashboard"></div></div>
+    <div class='dashboard-root'>
+        <div id="playerDashboard"></div>
+        <footer class="help-links dashboard-help-footer">
+            <a href="https://joerobdiscs.com/discount/RICHB" target="_blank" rel="noopener noreferrer" class="promo-link dashboard-promo-link">
+                <img src="https://joerobdiscs.com/cdn/shop/files/JRDG_Name_Logo_Joe_f24f21e2-4c03-4fa2-83c5-e34d9da1f39b.png?v=1761072560" alt="JoeRob Discs" class="dashboard-promo-logo">
+                <span>Free Shipping For Orders Over $25 at JoeRobDiscs.com</span>
+            </a>
+        </footer>
+    </div>
 `;
 
 
@@ -289,8 +297,8 @@ label[for='playerSelect'] {
             function renderPlayerCheckboxes() {
                 checkboxList.innerHTML = '';
                 checkboxList.innerHTML += `<div style="margin-bottom:8px;">
-                    <button type='button' id='selectAllPlayers' class='apply-btn' style='margin-right:8px;'>Select All</button>
-                    <button type='button' id='clearAllPlayers' class='apply-btn'>Clear All</button>
+                    <a href="#" id='selectAllPlayers' class='selector-action-link' style='margin-right:8px;'>Select All</a>
+                    <a href="#" id='clearAllPlayers' class='selector-action-link'>Clear All</a>
                 </div>`;
                 mergedPlayers.forEach(p => {
                     const checked = selectedPlayers.includes(p.displayName) ? 'checked' : '';
@@ -298,11 +306,13 @@ label[for='playerSelect'] {
                 });
                 // Add event listeners for select/clear all
                 setTimeout(() => {
-                    document.getElementById('selectAllPlayers').onclick = () => {
+                    document.getElementById('selectAllPlayers').onclick = (evt) => {
+                        evt.preventDefault();
                         selectedPlayers = mergedPlayers.map(p => p.displayName);
                         renderPlayerCheckboxes();
                     };
-                    document.getElementById('clearAllPlayers').onclick = () => {
+                    document.getElementById('clearAllPlayers').onclick = (evt) => {
+                        evt.preventDefault();
                         selectedPlayers = [];
                         renderPlayerCheckboxes();
                     };
@@ -340,8 +350,8 @@ label[for='playerSelect'] {
             function renderCourseCheckboxes() {
                 courseCheckboxList.innerHTML = '';
                 courseCheckboxList.innerHTML += `<div style="margin-bottom:8px;">
-                    <button type='button' id='selectAllCourses' class='apply-btn' style='margin-right:8px;'>Select All</button>
-                    <button type='button' id='clearAllCourses' class='apply-btn'>Clear All</button>
+                    <a href="#" id='selectAllCourses' class='selector-action-link' style='margin-right:8px;'>Select All</a>
+                    <a href="#" id='clearAllCourses' class='selector-action-link'>Clear All</a>
                 </div>`;
                 allCourses.forEach(c => {
                     const checked = selectedCourses.includes(c) ? 'checked' : '';
@@ -349,11 +359,13 @@ label[for='playerSelect'] {
                 });
                 // Add event listeners for select/clear all
                 setTimeout(() => {
-                    document.getElementById('selectAllCourses').onclick = () => {
+                    document.getElementById('selectAllCourses').onclick = (evt) => {
+                        evt.preventDefault();
                         selectedCourses = [...allCourses];
                         renderCourseCheckboxes();
                     };
-                    document.getElementById('clearAllCourses').onclick = () => {
+                    document.getElementById('clearAllCourses').onclick = (evt) => {
+                        evt.preventDefault();
                         selectedCourses = [];
                         renderCourseCheckboxes();
                     };
@@ -554,7 +566,7 @@ label[for='playerSelect'] {
                     if (!courseGroups[r.CourseName]) courseGroups[r.CourseName] = [];
                     courseGroups[r.CourseName].push(r);
                 });
-                let courseHtml = `<div class='section-title'>Course Breakdown</div><table><thead><tr><th class='left-align-col'>Course</th><th>Rounds</th><th>Avg Score</th><th>Avg To Par</th><th>Best</th><th>Avg Rating</th><th>Avg PDGA</th><th>Scorecard</th></tr></thead><tbody>`;
+                let courseHtml = `<div class='section-title'>Course Breakdown</div><table class='course-breakdown-table'><thead><tr><th class='left-align-col'>Course</th><th>Rounds</th><th>Avg Score</th><th>Avg To Par</th><th>Best</th><th>Avg Rating</th><th>Avg PDGA</th><th>Scorecard</th></tr></thead><tbody>`;
                 Object.entries(courseGroups).forEach(([course, group]) => {
                     const validGroup = group.filter(r => safeInt(r.Total) !== 0);
                     const avgS = validGroup.length > 0 ? validGroup.map(r => safeInt(r.Total)).reduce((a, b) => a + b, 0) / validGroup.length : 0;
@@ -866,7 +878,9 @@ function downloadDashboardHtml() {
 
 // Export button handlers via event delegation (buttons are dynamically injected)
 document.addEventListener('click', function(e) {
-    if (e.target && e.target.id === 'scorecardSaveImageBtn') {
+    const scorecardImageTrigger = e.target.closest('#scorecardSaveImageBtn');
+    if (scorecardImageTrigger) {
+        e.preventDefault();
         const content = document.getElementById('scorecardContent');
         if (!content) return;
         const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
@@ -877,7 +891,9 @@ document.addEventListener('click', function(e) {
             link.click();
         });
     }
-    if (e.target && e.target.id === 'scorecardSavePdfBtn') {
+    const scorecardPdfTrigger = e.target.closest('#scorecardSavePdfBtn');
+    if (scorecardPdfTrigger) {
+        e.preventDefault();
         const content = document.getElementById('scorecardContent');
         if (!content) return;
         const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
@@ -904,7 +920,9 @@ document.addEventListener('click', function(e) {
             pdf.save('scorecard.pdf');
         });
     }
-    if (e.target && e.target.id === 'saveImageBtn') {
+    const imageTrigger = e.target.closest('#saveImageBtn');
+    if (imageTrigger) {
+        e.preventDefault();
         const dash = document.querySelector('.dashboard-root');
         if (!dash) return;
         const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim() || '#111827';
@@ -915,7 +933,9 @@ document.addEventListener('click', function(e) {
             link.click();
         });
     }
-    if (e.target && e.target.id === 'savePdfBtn') {
+    const pdfTrigger = e.target.closest('#savePdfBtn');
+    if (pdfTrigger) {
+        e.preventDefault();
         const dash = document.querySelector('.dashboard-root');
         if (!dash) return;
         const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim() || '#111827';
