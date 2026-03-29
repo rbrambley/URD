@@ -15,9 +15,11 @@
     <div class="upload-section" id="uploadSection">
         <h1>UDisc Round Dashboard Generator</h1>
         <p>Upload your UDisc CSV file to generate a dashboard of your round statistics.</p>
-        <label for="csvFile" class="visually-hidden">Upload CSV file</label>
-        <input type="file" id="csvFile" accept=".csv" title="Upload CSV file">
-        <button onclick="processFile()">Analyze File</button>
+        <div class="upload-zone">
+            <label for="csvFile" class="upload-zone-label">Choose CSV File</label>
+            <input type="file" id="csvFile" accept=".csv" title="Upload CSV file">
+            <button onclick="processFile()">Analyze File</button>
+        </div>
         <div class="help-links">
             <p>Need help exporting your UDisc scorecards?</p>
             <a href="https://help.udisc.com/en/articles/10705081-how-can-i-export-my-scorecards-to-a-csv" target="_blank" rel="noopener noreferrer">How to Export Scorecards to CSV</a>
