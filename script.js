@@ -268,6 +268,7 @@ label[for='playerSelect'] {
     <div id="exportButtons" class="export-links export-links--dashboard">
         <a id="saveImageBtn" href="#" class="export-link">Save as Image</a>
         <a id="savePdfBtn" href="#" class="export-link">Save as PDF</a>
+        <a id="generateCoachBtn" href="#" class="export-link">Generate AI Coach Plan</a>
   </div>
     <div class='dashboard-root'>
         <div id="playerDashboard"></div>
@@ -406,6 +407,28 @@ label[for='playerSelect'] {
             const customEndDate = document.getElementById('customEndDate');
             const scorecardModal = document.getElementById('scorecardModal');
             const closeScorecardModal = document.getElementById('closeScorecardModal');
+            const coachModal = document.getElementById('coachModal');
+            const closeCoachModal = document.getElementById('closeCoachModal');
+            const coachContent = document.getElementById('coachContent');
+            let lastDashboardSnapshot = null;
+            let localCoachGenerator = null;
+            const coachSettingsState = {
+                useLocalLLMRewrite: false,
+                daysPerWeek: 5,
+                minutesPerSession: 45,
+                intentPreset: 'balanced',
+                intentText: ''
+            };
+            const savedCoachLLM = localStorage.getItem('coach-use-local-llm');
+            if (savedCoachLLM !== null) coachSettingsState.useLocalLLMRewrite = savedCoachLLM === 'true';
+            const savedCoachDays = localStorage.getItem('coach-days-per-week');
+            if (savedCoachDays) coachSettingsState.daysPerWeek = Math.max(3, Math.min(7, safeInt(savedCoachDays) || 5));
+            const savedCoachMinutes = localStorage.getItem('coach-minutes-per-session');
+            if (savedCoachMinutes) coachSettingsState.minutesPerSession = Math.max(30, Math.min(90, safeInt(savedCoachMinutes) || 45));
+            const savedCoachIntent = localStorage.getItem('coach-intent-preset');
+            if (savedCoachIntent) coachSettingsState.intentPreset = savedCoachIntent;
+            const savedCoachIntentText = localStorage.getItem('coach-intent-text');
+            if (savedCoachIntentText) coachSettingsState.intentText = savedCoachIntentText;
 
             function getDatePresetValue() {
                 const checked = document.querySelector('input[name="datePreset"]:checked');
@@ -435,6 +458,9 @@ label[for='playerSelect'] {
             closeScorecardModal.onclick = function() {
                 scorecardModal.style.display = 'none';
             };
+            closeCoachModal.onclick = function() {
+                coachModal.style.display = 'none';
+            };
             applyDateBtn.onclick = function() {
                 selectedDateFilter.mode = getDatePresetValue();
                 selectedDateFilter.startDate = customStartDate.value || '';
@@ -453,6 +479,7 @@ label[for='playerSelect'] {
                 if (event.target === courseModal) courseModal.style.display = 'none';
                 if (event.target === dateModal) dateModal.style.display = 'none';
                 if (event.target === scorecardModal) scorecardModal.style.display = 'none';
+                if (event.target === coachModal) coachModal.style.display = 'none';
             };
 
             function safeInt(val) {
@@ -512,6 +539,964 @@ label[for='playerSelect'] {
                 if (tp <= 1) return 'solid';
                 if (tp <= 5) return 'scrappy';
                 return 'rough';
+            }
+            function calcStdDev(values) {
+                if (!values || values.length === 0) return 0;
+                const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+                const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+                return Math.sqrt(variance);
+            }
+            const coachDrillLibrary = [
+                { id: 'safe-landing-round', title: 'Safe Landing Round', tags: ['risk-control', 'course-management'], minutes: '1 round', detail: 'Play one round choosing conservative landing zones on every tee shot.' },
+                { id: 'fairway-line-work', title: 'Fairway Line Control', tags: ['risk-control', 'consistency'], minutes: '35-45 min', detail: 'Throw 30 fairway-driver reps on one line shape and track misses left/right.' },
+                { id: 'midrange-centerline', title: 'Midrange Centerline Reps', tags: ['risk-control', 'approach'], minutes: '30-40 min', detail: 'Throw 25-30 mids to a center target and log circle-hit percentage.' },
+                { id: 'edge-circle-putts', title: 'Edge-of-Circle Putting', tags: ['putting', 'birdie-conversion'], minutes: '20-30 min', detail: 'Hit 30 edge-of-circle putts in sets of 10 and record make rate.' },
+                { id: 'birdie-approach-ladder', title: 'Birdie Approach Ladder', tags: ['birdie-conversion', 'approach'], minutes: '25-35 min', detail: 'Throw approach ladders at 150/200/250 feet and score each rep by makeable putt quality.' },
+                { id: 'scramble-save-block', title: 'Scramble Save Block', tags: ['scramble', 'risk-control'], minutes: '25-35 min', detail: 'Play 20 scramble scenarios from obstructed lies and track save percentage.' },
+                { id: 'pre-shot-routine', title: 'Pre-Shot Routine Round', tags: ['consistency', 'mental'], minutes: '1 round', detail: 'Run one fixed pre-shot checklist on every drive and upshot for an entire round.' },
+                { id: 'pressure-putt-finisher', title: 'Pressure Putt Finisher', tags: ['putting', 'consistency'], minutes: '15-20 min', detail: 'Finish sessions with 15 pressure putts; reset count if you miss 2 in a row.' },
+                { id: 'placement-only-round', title: 'Placement-Only Scoring Round', tags: ['course-management', 'consistency'], minutes: '1 round', detail: 'Play for position first and throw only your highest-trust lines.' },
+                { id: 'distance-control-grid', title: 'Distance Control Grid', tags: ['approach', 'consistency'], minutes: '30-40 min', detail: 'Throw 5 discs to 4 distance buckets and track average distance error.' }
+            ];
+            function toPercent(x) {
+                return (100 * x).toFixed(1);
+            }
+            function confidenceFrom(rounds, severity) {
+                const roundsScore = Math.min(1, rounds / 30);
+                const sevScore = Math.min(1, Math.max(0, severity));
+                const combined = 0.55 * roundsScore + 0.45 * sevScore;
+                if (combined >= 0.7) return 'High';
+                if (combined >= 0.45) return 'Medium';
+                return 'Low';
+            }
+            function detectArchetype(snapshot) {
+                if (snapshot.riskOutcomeRate >= 0.5 && snapshot.birdieRate >= 0.18) return 'Volatile Attacker';
+                if (snapshot.birdieRate < 0.14 && snapshot.riskOutcomeRate <= 0.42) return 'Low-Birdie Grinder';
+                if (snapshot.riskOutcomeRate >= 0.5 && snapshot.toParStdDev > 3.0) return 'Floor-Collapser';
+                const recentTrend = snapshot.previousTenAvgToPar !== null ? (snapshot.recentTenAvgToPar - snapshot.previousTenAvgToPar) : 0;
+                if (Math.abs(recentTrend) <= 0.4 && snapshot.toParStdDev <= 2.6) return 'Plateaued Improver';
+                return 'Balanced Builder';
+            }
+            function getArchetypeSelectionExplanation(snapshot) {
+                const recentTrend = snapshot.previousTenAvgToPar !== null
+                    ? (snapshot.recentTenAvgToPar - snapshot.previousTenAvgToPar)
+                    : 0;
+                const checks = [
+                    {
+                        name: 'Volatile Attacker',
+                        pass: snapshot.riskOutcomeRate >= 0.5 && snapshot.birdieRate >= 0.18,
+                        rule: `risk >= 50% and birdie >= 18% (risk ${snapshot.riskOutcomeRatePct}%, birdie ${snapshot.birdieRatePct}%)`
+                    },
+                    {
+                        name: 'Low-Birdie Grinder',
+                        pass: snapshot.birdieRate < 0.14 && snapshot.riskOutcomeRate <= 0.42,
+                        rule: `birdie < 14% and risk <= 42% (birdie ${snapshot.birdieRatePct}%, risk ${snapshot.riskOutcomeRatePct}%)`
+                    },
+                    {
+                        name: 'Floor-Collapser',
+                        pass: snapshot.riskOutcomeRate >= 0.5 && snapshot.toParStdDev > 3.0,
+                        rule: `risk >= 50% and to-par SD > 3.0 (risk ${snapshot.riskOutcomeRatePct}%, SD ${snapshot.toParStdDev.toFixed(1)})`
+                    },
+                    {
+                        name: 'Plateaued Improver',
+                        pass: Math.abs(recentTrend) <= 0.4 && snapshot.toParStdDev <= 2.6,
+                        rule: `|recent trend| <= 0.4 and to-par SD <= 2.6 (trend ${recentTrend.toFixed(1)}, SD ${snapshot.toParStdDev.toFixed(1)})`
+                    }
+                ];
+                const matched = checks.find(c => c.pass);
+                const selected = matched ? matched.name : 'Balanced Builder';
+                if (matched) {
+                    return {
+                        selected,
+                        summary: `Selected archetype: ${matched.name}.`,
+                        details: checks
+                            .slice(0, checks.findIndex(c => c.name === matched.name) + 1)
+                            .map(c => `${c.pass ? 'Match' : 'No match'}: ${c.name} (${c.rule})`)
+                    };
+                }
+                return {
+                    selected,
+                    summary: 'No specific archetype rule matched, so Balanced Builder was selected as fallback.',
+                    details: [
+                        ...checks.map(c => `No match: ${c.name} (${c.rule})`),
+                        'Match: Balanced Builder (fallback: no earlier archetype rule matched).'
+                    ]
+                };
+            }
+            function getArchetypeWeights(archetype) {
+                const base = { risk: 1, birdie: 1, consistency: 1, trend: 1 };
+                if (archetype === 'Volatile Attacker') return { risk: 1.35, birdie: 1.1, consistency: 1.15, trend: 1 };
+                if (archetype === 'Low-Birdie Grinder') return { risk: 0.95, birdie: 1.4, consistency: 1.05, trend: 1.1 };
+                if (archetype === 'Floor-Collapser') return { risk: 1.4, birdie: 0.95, consistency: 1.35, trend: 1.1 };
+                if (archetype === 'Plateaued Improver') return { risk: 1, birdie: 1.2, consistency: 1.2, trend: 1.3 };
+                return base;
+            }
+            function pickDrills(tags, limit = 2, usedIds = null) {
+                const scored = coachDrillLibrary.map(d => {
+                    const overlap = d.tags.filter(t => tags.includes(t)).length;
+                    return { drill: d, score: overlap };
+                }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+                const chosen = [];
+                for (const item of scored) {
+                    if (chosen.length >= limit) break;
+                    if (usedIds && usedIds.has(item.drill.id)) continue;
+                    chosen.push(item);
+                    if (usedIds) usedIds.add(item.drill.id);
+                }
+                if (chosen.length < limit) {
+                    for (const item of scored) {
+                        if (chosen.length >= limit) break;
+                        if (chosen.find(c => c.drill.id === item.drill.id)) continue;
+                        chosen.push(item);
+                    }
+                }
+                return chosen.map(x => `${x.drill.title}: ${x.drill.detail}`);
+            }
+            function pickDrillObjects(tags, limit = 2, usedIds = null) {
+                const scored = coachDrillLibrary.map(d => {
+                    const overlap = d.tags.filter(t => tags.includes(t)).length;
+                    return { drill: d, score: overlap };
+                }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+                const chosen = [];
+                for (const item of scored) {
+                    if (chosen.length >= limit) break;
+                    if (usedIds && usedIds.has(item.drill.id)) continue;
+                    chosen.push(item.drill);
+                    if (usedIds) usedIds.add(item.drill.id);
+                }
+                if (chosen.length < limit) {
+                    for (const item of scored) {
+                        if (chosen.length >= limit) break;
+                        if (chosen.find(c => c.id === item.drill.id)) continue;
+                        chosen.push(item.drill);
+                    }
+                }
+                return chosen;
+            }
+            function getCoachConstraints() {
+                return {
+                    daysPerWeek: Math.max(3, Math.min(7, safeInt(coachSettingsState.daysPerWeek))),
+                    minutesPerSession: Math.max(30, Math.min(90, safeInt(coachSettingsState.minutesPerSession))),
+                    intentPreset: coachSettingsState.intentPreset || 'balanced',
+                    intentText: (coachSettingsState.intentText || '').trim()
+                };
+            }
+            function parseCustomIntent(customText) {
+                const text = (customText || '').toLowerCase();
+                const matches = [];
+                const addMatch = (id, title, directive, tags, preferredFocusIds, boosts, kpiCheck) => {
+                    if (matches.find(m => m.id === id)) return;
+                    matches.push({ id, title, directive, tags, preferredFocusIds, boosts, kpiCheck });
+                };
+
+                if (/drive\s*accuracy|fairway|off\s*tee\s*accuracy|tee\s*accuracy/.test(text)) {
+                    addMatch(
+                        'drive-accuracy',
+                        'Drive Accuracy',
+                        'Prioritize controlled tee-shot placement and fairway-hit consistency before adding power.',
+                        ['risk-control', 'consistency', 'course-management'],
+                        ['risk', 'consistency', 'birdie'],
+                        { risk: 0.28, consistency: 0.18, birdie: 0 },
+                        'Track fairway-hit percentage over each 5-round block.'
+                    );
+                }
+                if (/drive\s*distance|throw\s*farther|more\s*distance|distance\s*off\s*tee/.test(text)) {
+                    addMatch(
+                        'drive-distance',
+                        'Controlled Drive Distance',
+                        'Build distance with control: pair power sessions with line-holding and miss-dispersion tracking.',
+                        ['birdie-conversion', 'approach', 'consistency'],
+                        ['birdie', 'consistency', 'risk'],
+                        { risk: 0, consistency: 0.1, birdie: 0.3 },
+                        'Track average landing distance and left/right dispersion for 10 max-control drives.'
+                    );
+                }
+                if (/hit\s*my\s*lines|line\s*shape|line\s*control/.test(text)) {
+                    addMatch(
+                        'line-control',
+                        'Line-Hitting Consistency',
+                        'Emphasize repeatable release angles and target-line execution under light pressure.',
+                        ['consistency', 'risk-control', 'approach'],
+                        ['consistency', 'risk', 'birdie'],
+                        { risk: 0.1, consistency: 0.3, birdie: 0 },
+                        'Track planned-vs-actual line execution rate each round.'
+                    );
+                }
+                if (/pdga|rating|increase\s*my\s*rating|raise\s*my\s*rating/.test(text)) {
+                    addMatch(
+                        'pdga-rating',
+                        'PDGA Rating Progression',
+                        'Prioritize low-variance scoring and bogey avoidance while preserving birdie opportunities.',
+                        ['risk-control', 'consistency', 'birdie-conversion'],
+                        ['risk', 'consistency', 'birdie'],
+                        { risk: 0.2, consistency: 0.22, birdie: 0.08 },
+                        'Track clean-round percentage and double-bogey-or-worse frequency every 5 rounds.'
+                    );
+                }
+
+                return {
+                    text: customText || '',
+                    matches,
+                    combined: {
+                        tags: Array.from(new Set(matches.flatMap(m => m.tags))),
+                        preferredFocusIds: matches.flatMap(m => m.preferredFocusIds).filter((x, i, arr) => arr.indexOf(x) === i),
+                        boosts: matches.reduce((acc, m) => ({
+                            risk: acc.risk + (m.boosts.risk || 0),
+                            consistency: acc.consistency + (m.boosts.consistency || 0),
+                            birdie: acc.birdie + (m.boosts.birdie || 0)
+                        }), { risk: 0, consistency: 0, birdie: 0 }),
+                        kpiChecks: matches.map(m => m.kpiCheck)
+                    }
+                };
+            }
+            function getCoachIntentProfile(constraints) {
+                const preset = constraints && constraints.intentPreset ? constraints.intentPreset : 'balanced';
+                const customText = (constraints && constraints.intentText ? constraints.intentText : '').trim();
+                const profile = {
+                    preset,
+                    label: 'Balanced Improvement',
+                    instruction: 'Keep plan balanced across risk control, birdie conversion, and consistency.',
+                    maxMinutes: null,
+                    riskBoost: 0,
+                    birdieBoost: 0,
+                    consistencyBoost: 0,
+                    customIntent: null
+                };
+                if (preset === 'prep_tournament') {
+                    profile.label = 'Prep for Tournament';
+                    profile.instruction = 'Prioritize scoring floor, routine consistency, and on-course execution under pressure.';
+                    profile.riskBoost = 0.2;
+                    profile.consistencyBoost = 0.25;
+                } else if (preset === 'short_sessions') {
+                    profile.label = 'Short Sessions Only';
+                    profile.instruction = 'Favor compact sessions with one primary drill block and quick KPI checks.';
+                    profile.maxMinutes = 35;
+                } else if (preset === 'putting_priority') {
+                    profile.label = 'Putting Priority Week';
+                    profile.instruction = 'Bias training toward putting reps and birdie conversion while maintaining risk control floor.';
+                    profile.birdieBoost = 0.28;
+                } else if (preset === 'custom' && customText) {
+                    const parsed = parseCustomIntent(customText);
+                    profile.label = `Custom: ${customText}`;
+                    profile.customIntent = parsed;
+                    if (parsed.matches.length > 0) {
+                        profile.instruction = `Custom user intent mapped to: ${parsed.matches.map(m => m.title).join(', ')}.`;
+                        profile.riskBoost += parsed.combined.boosts.risk;
+                        profile.birdieBoost += parsed.combined.boosts.birdie;
+                        profile.consistencyBoost += parsed.combined.boosts.consistency;
+                    } else {
+                        profile.instruction = `Custom user intent: ${customText}.`;
+                    }
+                }
+                return profile;
+            }
+            function buildLocalCoachPlan(snapshot, constraints) {
+                const recentTrend = snapshot.previousTenAvgToPar !== null
+                    ? (snapshot.recentTenAvgToPar - snapshot.previousTenAvgToPar)
+                    : 0;
+                const intent = getCoachIntentProfile(constraints);
+                const archetype = detectArchetype(snapshot);
+                const archetypeSelection = getArchetypeSelectionExplanation(snapshot);
+                const weights = getArchetypeWeights(archetype);
+                const focusPool = [];
+
+                const riskSeverity = Math.max(0, (snapshot.riskOutcomeRate - 0.38) / 0.2) + intent.riskBoost;
+                focusPool.push({
+                    id: 'risk',
+                    title: 'Reduce High-Risk Mistakes',
+                    why: `High-risk outcomes are ${snapshot.riskOutcomeRatePct}% of holes.`,
+                    target: `Reduce risk outcomes to ${(Math.max(0.22, snapshot.riskOutcomeRate - 0.05) * 100).toFixed(1)}% over next 10 rounds.`,
+                    evidence: [`Current risk rate: ${snapshot.riskOutcomeRatePct}%`, 'Driver miss-to-scramble pattern likely inflating scores.'],
+                    tags: ['risk-control', 'course-management', 'consistency'],
+                    severity: riskSeverity,
+                    confidence: confidenceFrom(snapshot.totalRounds, riskSeverity)
+                });
+
+                const birdieSeverity = Math.max(0, (0.19 - snapshot.birdieRate) / 0.1) + intent.birdieBoost;
+                focusPool.push({
+                    id: 'birdie',
+                    title: 'Increase Birdie Conversion',
+                    why: `Birdie rate is ${snapshot.birdieRatePct}% of holes.`,
+                    target: `Raise birdie rate to ${(Math.min(30, snapshot.birdieRate * 100 + 3)).toFixed(1)}% in next 10 rounds.`,
+                    evidence: [`Current birdie rate: ${snapshot.birdieRatePct}%`, 'Approach + circle-edge putt conversion are likely biggest upside levers.'],
+                    tags: ['birdie-conversion', 'putting', 'approach'],
+                    severity: birdieSeverity,
+                    confidence: confidenceFrom(snapshot.totalRounds, birdieSeverity)
+                });
+
+                const consistencySeverity = Math.max(0, (snapshot.toParStdDev - 2.4) / 1.6) + intent.consistencyBoost;
+                focusPool.push({
+                    id: 'consistency',
+                    title: 'Stabilize Round-to-Round Variance',
+                    why: `To-par standard deviation is ${snapshot.toParStdDev.toFixed(1)}.`,
+                    target: `Lower to-par SD to ${Math.max(1.8, snapshot.toParStdDev - 0.8).toFixed(1)} in 4 weeks.`,
+                    evidence: [`Current volatility: ${snapshot.toParStdDev.toFixed(1)}`, 'Large spread suggests avoidable blow-up holes.'],
+                    tags: ['consistency', 'mental', 'course-management'],
+                    severity: consistencySeverity,
+                    confidence: confidenceFrom(snapshot.totalRounds, consistencySeverity)
+                });
+
+                const trendSeverity = Math.max(0, recentTrend / 2.5);
+                focusPool.push({
+                    id: 'trend',
+                    title: 'Reverse Recent Trend Drift',
+                    why: snapshot.previousTenAvgToPar !== null
+                        ? `Recent 10 rounds are ${recentTrend.toFixed(1)} worse to-par than previous 10.`
+                        : 'Recent-trend sample is limited; use a short-cycle reset plan.',
+                    target: snapshot.previousTenAvgToPar !== null
+                        ? `Return recent average to ${snapshot.previousTenAvgToPar.toFixed(1)} to-par baseline.`
+                        : 'Improve last-10 average by at least 0.8 strokes to-par in 2 weeks.',
+                    evidence: snapshot.previousTenAvgToPar !== null
+                        ? [`Last 10 to-par: ${snapshot.recentTenAvgToPar.toFixed(1)}`, `Prev 10 to-par: ${snapshot.previousTenAvgToPar.toFixed(1)}`]
+                        : ['Not enough prior rounds for stable trend comparison.'],
+                    tags: ['consistency', 'course-management', 'risk-control'],
+                    severity: trendSeverity,
+                    confidence: confidenceFrom(snapshot.totalRounds, trendSeverity)
+                });
+
+                const rankedFocuses = focusPool
+                    .map(f => ({ ...f, score: f.severity * (weights[f.id] || 1) }))
+                    .sort((a, b) => b.score - a.score);
+
+                let selectedFocuses = rankedFocuses.filter(f => f.score > 0.15).slice(0, 3);
+                if (selectedFocuses.length === 0) {
+                    selectedFocuses = [{
+                        id: 'momentum',
+                        title: 'Maintain Momentum and Raise Ceiling',
+                        why: 'No major leaks stand out from current filters.',
+                        target: 'Preserve floor and gain 1-2 makeable birdie looks per round.',
+                        evidence: ['Current profile is balanced across risk, conversion, and consistency.'],
+                        tags: ['birdie-conversion', 'consistency'],
+                        severity: 0.25,
+                        confidence: confidenceFrom(snapshot.totalRounds, 0.25),
+                        score: 0.25
+                    }];
+                }
+
+                const getIntentPreferredFocusIds = () => {
+                    if (intent.preset === 'putting_priority') return ['birdie', 'consistency', 'risk'];
+                    if (intent.preset === 'prep_tournament') return ['risk', 'consistency', 'trend'];
+                    if (intent.preset === 'short_sessions') return ['risk', 'birdie', 'consistency'];
+                    if (intent.preset === 'custom') {
+                        if (intent.customIntent && intent.customIntent.matches.length > 0) {
+                            return intent.customIntent.combined.preferredFocusIds;
+                        }
+                        const t = (constraints.intentText || '').toLowerCase();
+                        if (/putt|c1|c2|birdie/.test(t)) return ['birdie', 'consistency', 'risk'];
+                        if (/tournament|event|pressure|clean/.test(t)) return ['risk', 'consistency', 'birdie'];
+                        if (/short|quick|time|busy/.test(t)) return ['risk', 'birdie', 'consistency'];
+                    }
+                    return [];
+                };
+                const preferredIds = getIntentPreferredFocusIds();
+                const severeLeak = rankedFocuses[0];
+                if (preferredIds.length > 0) {
+                    const preferredFocus = preferredIds
+                        .map(id => rankedFocuses.find(f => f.id === id))
+                        .find(f => !!f);
+                    if (preferredFocus) {
+                        const severeGap = severeLeak && severeLeak.id !== preferredFocus.id && (severeLeak.score - preferredFocus.score) > 0.75;
+                        if (!severeGap) {
+                            const dedup = [preferredFocus, ...selectedFocuses].filter((f, idx, arr) => arr.findIndex(x => x.id === f.id) === idx);
+                            selectedFocuses = dedup.slice(0, 3);
+                        }
+                    }
+                }
+
+                const focuses = selectedFocuses.map(f => ({
+                    title: f.title,
+                    why: f.why,
+                    target: f.target,
+                    evidence: f.evidence,
+                    confidence: f.confidence,
+                    tags: f.tags,
+                    drills: pickDrills(f.tags, 2)
+                }));
+
+                const strengths = [];
+                if (snapshot.birdieRate >= 0.20) strengths.push(`Birdie production is strong at ${snapshot.birdieRatePct}% of holes.`);
+                if (snapshot.riskOutcomeRate <= 0.35) strengths.push(`Mistake containment is solid with only ${snapshot.riskOutcomeRatePct}% high-risk holes.`);
+                if (snapshot.toParStdDev <= 2.2) strengths.push(`Round consistency is good (to-par SD ${snapshot.toParStdDev.toFixed(1)}).`);
+                if (strengths.length === 0) strengths.push('Baseline is steady enough to support focused gains with targeted reps.');
+
+                const gaps = [];
+                if (snapshot.riskOutcomeRate > 0.40) gaps.push(`High-risk outcomes are elevated at ${snapshot.riskOutcomeRatePct}% of holes.`);
+                if (snapshot.birdieRate < 0.18) gaps.push(`Birdie conversion is low at ${snapshot.birdieRatePct}% of holes.`);
+                if (snapshot.toParStdDev > 2.8) gaps.push(`Score volatility is high (to-par SD ${snapshot.toParStdDev.toFixed(1)}).`);
+                if (recentTrend > 0.5) gaps.push(`Recent 10-round trend is ${recentTrend.toFixed(1)} strokes worse than prior 10.`);
+                if (gaps.length === 0) gaps.push('No critical leaks detected; focus on incremental scoring gains.');
+
+                const primary = focuses[0];
+                const min = intent.maxMinutes ? Math.min(constraints.minutesPerSession, intent.maxMinutes) : constraints.minutesPerSession;
+                const sessionDuration = min <= 30 ? '20-30 min' : min <= 45 ? '30-45 min' : min <= 60 ? '45-60 min' : '60-75 min';
+
+                const analysis = [
+                    `Sample includes ${snapshot.totalRounds} rounds with an average score of ${snapshot.avgScore.toFixed(1)} and average to-par of ${snapshot.avgToPar.toFixed(1)}.`,
+                    `Birdie rate is ${snapshot.birdieRatePct}% and high-risk outcomes are ${snapshot.riskOutcomeRatePct}% of holes.`,
+                    `Total throws in this filtered sample: ${snapshot.totalThrows}; outcome volume: ${snapshot.totalOutcomes}.`,
+                    `Round consistency (to-par SD) is ${snapshot.toParStdDev.toFixed(1)}.`
+                ];
+                if (intent.preset !== 'balanced') {
+                }
+                if (snapshot.previousTenAvgToPar !== null) {
+                    analysis.push(`Recent trend: last 10 rounds at ${snapshot.recentTenAvgToPar.toFixed(1)} to-par vs previous 10 at ${snapshot.previousTenAvgToPar.toFixed(1)}.`);
+                }
+
+                const coachingInsights = [
+                    'Course-management rule: if tee shot risk is high, play to your most repeatable landing zone.',
+                    'Putt process rule: use one consistent pre-putt routine on every scoring putt.',
+                    'Round reset rule: after any double-bogey or worse, play next hole for par floor first.'
+                ];
+                let customIntentActions = null;
+                if (intent.preset === 'custom' && intent.customIntent && intent.customIntent.matches.length > 0) {
+                    const customTags = intent.customIntent.combined.tags.length > 0
+                        ? intent.customIntent.combined.tags
+                        : ['consistency', 'risk-control'];
+                    customIntentActions = {
+                        mappedThemes: intent.customIntent.matches.map(m => m.title),
+                        drillPlan: pickDrills(customTags, 3),
+                        checks: intent.customIntent.combined.kpiChecks
+                    };
+                }
+                if (customIntentActions) {
+                }
+
+                const targetRiskPct = Math.max(5, snapshot.riskOutcomeRate * 100 - 5);
+                const targetBirdiePct = Math.min(45, snapshot.birdieRate * 100 + 2);
+                const targetToParSd = Math.max(0.9, snapshot.toParStdDev * (snapshot.toParStdDev > 1.6 ? 0.85 : 0.95));
+                const kpis = [
+                    `Reduce high-risk outcomes from ${snapshot.riskOutcomeRatePct}% to ${targetRiskPct.toFixed(1)}%`,
+                    `Increase birdie rate from ${snapshot.birdieRatePct}% to ${targetBirdiePct.toFixed(1)}%`,
+                    `Lower to-par SD from ${snapshot.toParStdDev.toFixed(1)} to ${targetToParSd.toFixed(1)}`
+                ];
+
+                const riskSessionsPerWeek = Math.max(1, Math.min(3, Math.floor(constraints.daysPerWeek / 2)));
+                const birdieSessionsPerWeek = Math.max(1, Math.min(3, Math.ceil(constraints.daysPerWeek / 2)));
+                const consistencySessionsPerWeek = snapshot.toParStdDev >= 3.0 && constraints.daysPerWeek >= 6 ? 2 : 1;
+                const kpiUsedDrills = new Set();
+                const kpiSupport = [
+                    {
+                        title: 'KPI 1: Risk Outcome Rate',
+                        metric: kpis[0],
+                        sessionsPerWeek: riskSessionsPerWeek,
+                        cadence: `${riskSessionsPerWeek} day(s)/week`,
+                        check: 'Log high-risk outcomes each round and compare 5-round rolling average.',
+                        drills: pickDrillObjects(['risk-control', 'course-management', 'scramble'], 2, kpiUsedDrills)
+                    },
+                    {
+                        title: 'KPI 2: Birdie Conversion',
+                        metric: kpis[1],
+                        sessionsPerWeek: birdieSessionsPerWeek,
+                        cadence: `${birdieSessionsPerWeek} day(s)/week`,
+                        check: 'Track makeable birdie looks and conversion rate by round.',
+                        drills: pickDrillObjects(['birdie-conversion', 'putting', 'approach'], 2, kpiUsedDrills)
+                    },
+                    {
+                        title: 'KPI 3: Round Consistency',
+                        metric: kpis[2],
+                        sessionsPerWeek: consistencySessionsPerWeek,
+                        cadence: `${consistencySessionsPerWeek} day(s)/week`,
+                        check: 'Track to-par each round and update SD every 5 rounds.',
+                        drills: pickDrillObjects(['consistency', 'mental', 'course-management'], 2, kpiUsedDrills)
+                    }
+                ];
+
+                const weekSlots = Array.from({ length: 7 }, () => []);
+                const getPreferredDays = (count) => {
+                    if (count <= 0) return [];
+                    const picks = [];
+                    for (let i = 0; i < count; i++) {
+                        const d = Math.round(((i + 0.5) * 7) / count);
+                        picks.push(Math.max(1, Math.min(7, d)));
+                    }
+                    return picks;
+                };
+                const placeOnNearestOpenDay = (preferredDay, payload) => {
+                    const preferredIdx = preferredDay - 1;
+                    if (weekSlots[preferredIdx].length === 0) {
+                        weekSlots[preferredIdx].push(payload);
+                        return;
+                    }
+                    for (let offset = 1; offset < 7; offset++) {
+                        const left = preferredIdx - offset;
+                        const right = preferredIdx + offset;
+                        if (left >= 0 && weekSlots[left].length === 0) {
+                            weekSlots[left].push(payload);
+                            return;
+                        }
+                        if (right < 7 && weekSlots[right].length === 0) {
+                            weekSlots[right].push(payload);
+                            return;
+                        }
+                    }
+                    weekSlots[preferredIdx].push(payload);
+                };
+                const sortedKpiSupport = [...kpiSupport].sort((a, b) => b.sessionsPerWeek - a.sessionsPerWeek);
+                sortedKpiSupport.forEach(kpi => {
+                    const preferredDays = getPreferredDays(kpi.sessionsPerWeek);
+                    preferredDays.forEach((day, idx) => {
+                        placeOnNearestOpenDay(day, { kpi, sessionIndex: idx });
+                    });
+                });
+                const formatSessionDrills = (kpi, sessionIndex) => {
+                    const drills = kpi.drills || [];
+                    if (drills.length === 0) return ['Run one focused block tied to this KPI and log outcomes.'];
+                    const first = drills[sessionIndex % drills.length];
+                    const second = drills.length > 1 ? drills[(sessionIndex + 1) % drills.length] : null;
+                    const lines = [`${first.title}: ${first.detail}`];
+                    if (second && intent.preset !== 'short_sessions') lines.push(`${second.title}: ${second.detail}`);
+                    lines.push(`Session check: ${kpi.check}`);
+                    return lines;
+                };
+                const dailyPlan = Array.from({ length: 7 }, (_, idx) => {
+                    const dayNum = idx + 1;
+                    const sessions = weekSlots[idx];
+                    if (!sessions || sessions.length === 0) {
+                        if (dayNum === 7) {
+                            return {
+                                day: `Day ${dayNum}`,
+                                focus: 'Review + Recalibrate',
+                                duration: '15-20 min',
+                                cadence: 'Weekly checkpoint',
+                                drills: [
+                                    'Review KPI movement from this week.',
+                                    `Set next week primary focus: ${primary.title}.`
+                                ]
+                            };
+                        }
+                        return {
+                            day: `Day ${dayNum}`,
+                            focus: 'Recovery / Light Technical Reset',
+                            duration: '15-20 min optional',
+                            cadence: 'No KPI block',
+                            drills: [
+                                'Light mobility and 10-15 smooth form reps.',
+                                'Quick note review: one adjustment for next KPI session.'
+                            ]
+                        };
+                    }
+                    if (sessions.length === 1) {
+                        const slot = sessions[0];
+                        return {
+                            day: `Day ${dayNum}`,
+                            focus: slot.kpi.title.replace(/^KPI\s*\d+\s*:\s*/i, ''),
+                            duration: sessionDuration,
+                            cadence: slot.kpi.cadence,
+                            drills: formatSessionDrills(slot.kpi, slot.sessionIndex)
+                        };
+                    }
+                    const combinedDrills = [];
+                    sessions.forEach(slot => {
+                        combinedDrills.push(...formatSessionDrills(slot.kpi, slot.sessionIndex).slice(0, 2));
+                    });
+                    return {
+                        day: `Day ${dayNum}`,
+                        focus: 'Combined KPI Session',
+                        duration: sessionDuration,
+                        cadence: sessions.map(s => s.kpi.cadence).join(' + '),
+                        drills: combinedDrills
+                    };
+                });
+
+                return {
+                    intentLabel: intent.label,
+                    archetype,
+                    archetypeSelection,
+                    headline: focuses[0].title,
+                    summary: `Primary focus for your next 2 weeks: ${focuses[0].title}. Intent: ${intent.label}. Plan calibrated for ${constraints.daysPerWeek} day(s)/week at ~${min} minutes/session. Reassess after 5 rounds using the same filters.`,
+                    analysis,
+                    strengths,
+                    gaps,
+                    focuses: focuses.slice(0, 3),
+                    dailyPlan,
+                    coachingInsights,
+                    kpis,
+                    kpiSupport,
+                    customIntentActions
+                };
+            }
+            async function getLocalCoachGenerator() {
+                if (localCoachGenerator) return localCoachGenerator;
+                const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+                env.allowLocalModels = false;
+                env.useBrowserCache = true;
+                localCoachGenerator = await pipeline('text2text-generation', 'Xenova/flan-t5-small');
+                return localCoachGenerator;
+            }
+            async function rewriteCoachPlanWithLocalLLM(plan, snapshot, constraints) {
+                const generator = await getLocalCoachGenerator();
+                const intent = getCoachIntentProfile(constraints || {});
+                const runId = Date.now();
+                const fallbackDrills = Array.from(new Set(plan.focuses.flatMap(f => f.drills || []))).slice(0, 4);
+                const buildDynamicFallbackNotes = () => {
+                    const pool = [
+                        `This week's priority: ${plan.headline} — focus on this in your first session.`,
+                        `Micro-goal: improve one KPI check this week (${plan.kpis[0]}).`,
+                        `Pressure rep: end each session with one must-make sequence tied to ${plan.focuses[0].title}.`,
+                        `On-course cue: use one repeatable commit phrase before every high-impact throw.`,
+                        `Variation: shift one weekly session to a scored simulation under time pressure.`
+                    ];
+                    const selected = [];
+                    while (selected.length < 3 && pool.length > 0) {
+                        const idx = Math.floor(Math.random() * pool.length);
+                        selected.push(pool.splice(idx, 1)[0]);
+                    }
+                    return selected;
+                };
+                const prompt = [
+                    'Rewrite this disc golf coaching plan with unique narrative and fresh drill phrasing.',
+                    'Keep practical coaching tone. Do not change the numeric facts.',
+                    `User intent: ${intent.label}. ${intent.instruction}`,
+                    `Run context id: ${runId} (use this to produce unique tactical variation for this run).`,
+                    `Metrics: rounds=${snapshot.totalRounds}, avgScore=${snapshot.avgScore.toFixed(1)}, avgToPar=${snapshot.avgToPar.toFixed(1)}, birdieRate=${snapshot.birdieRatePct}%, riskOutcomes=${snapshot.riskOutcomeRatePct}%, toParSD=${snapshot.toParStdDev.toFixed(1)}.`,
+                    `Primary focus: ${plan.headline}.`,
+                    `Current summary: ${plan.summary}`,
+                    'Output only in this plain-text format (no placeholders, no angle brackets):',
+                    'NARRATIVE: <4-6 sentences>',
+                    'DRILLS:',
+                    '- item 1',
+                    '- item 2',
+                    '- item 3',
+                    '- item 4',
+                    'KPI_SCOPE:',
+                    '- KPI 1: <reframed KPI target statement>',
+                    '- KPI 2: <reframed KPI target statement>',
+                    '- KPI 3: <reframed KPI target statement>',
+                    'ALT_WEEK:',
+                    '- Day 1: Focus Name | drill 1; drill 2; drill 3',
+                    '- Day 2: Focus Name | drill 1; drill 2; drill 3',
+                    '- Day 3: Focus Name | drill 1; drill 2; drill 3',
+                    '- Day 4: Focus Name | drill 1; drill 2; drill 3',
+                    '- Day 5: Focus Name | drill 1; drill 2; drill 3',
+                    '- Day 6: Focus Name | drill 1; drill 2; drill 3',
+                    '- Day 7: Focus Name | drill 1; drill 2; drill 3',
+                    'DYNAMIC_NOTES:',
+                    '- note 1',
+                    '- note 2',
+                    '- note 3',
+                    'Do not write words like bullet, placeholder, item 1 template.'
+                ].join('\n');
+                const out = await generator(prompt, {
+                    max_new_tokens: 320,
+                    temperature: 0.9,
+                    top_p: 0.95,
+                    repetition_penalty: 1.08
+                });
+                const text = (out && out[0] && out[0].generated_text) ? out[0].generated_text.trim() : '';
+                const narrativeMatch = text.match(/NARRATIVE:\s*([\s\S]*?)DRILLS:/i);
+                const drillsMatch = text.match(/DRILLS:\s*([\s\S]*?)KPI_SCOPE:/i) || text.match(/DRILLS:\s*([\s\S]*?)ALT_WEEK:/i) || text.match(/DRILLS:\s*([\s\S]*)/i);
+                const kpiScopeMatch = text.match(/KPI_SCOPE:\s*([\s\S]*?)ALT_WEEK:/i) || text.match(/KPI_SCOPE:\s*([\s\S]*?)DYNAMIC_NOTES:/i) || text.match(/KPI_SCOPE:\s*([\s\S]*)/i);
+                const altWeekMatch = text.match(/ALT_WEEK:\s*([\s\S]*?)DYNAMIC_NOTES:/i) || text.match(/ALT_WEEK:\s*([\s\S]*)/i);
+                const dynamicNotesMatch = text.match(/DYNAMIC_NOTES:\s*([\s\S]*)/i);
+                const rawNarrative = narrativeMatch ? narrativeMatch[1].trim() : text;
+                const narrative = rawNarrative
+                    .replace(/DRILLS:\s*[\s\S]*$/i, '')
+                    .replace(/[<>]/g, '')
+                    .trim();
+                const rawDrillSection = drillsMatch ? drillsMatch[1] : '';
+                const splitDrills = rawDrillSection
+                    .replace(/\r/g, '\n')
+                    .split(/\n|(?=\s*-\s)|(?=\s*\*\s)|(?=\s*\d+[\).]\s)/)
+                    .map(l => l.trim())
+                    .map(l => l.replace(/^[-*]\s*/, '').replace(/^\d+[\).]\s*/, '').trim())
+                    .map(l => l.replace(/[<>]/g, '').trim())
+                    .filter(l => l.length > 8)
+                    .filter(l => !/^(bullet|placeholder|item\s*\d+)/i.test(l))
+                    .filter(l => !/(template|example)/i.test(l));
+                const drills = (splitDrills.length >= 3 ? splitDrills : fallbackDrills).slice(0, 6);
+                const rawAltWeek = altWeekMatch ? altWeekMatch[1] : '';
+                const altWeek = rawAltWeek
+                    .replace(/\r/g, '\n')
+                    .split(/\n|(?=\s*-\s)|(?=\s*\d+[\).]\s)/)
+                    .map(l => l.trim())
+                    .map(l => l.replace(/^[-*]\s*/, '').replace(/^\d+[\).]\s*/, '').trim())
+                    .map(l => l.replace(/[<>]/g, '').trim())
+                    .filter(l => /day\s*\d+/i.test(l) || l.length > 18)
+                    .slice(0, 7);
+                const rawKpiScope = kpiScopeMatch ? kpiScopeMatch[1] : '';
+                const kpiAdjustments = rawKpiScope
+                    .replace(/\r/g, '\n')
+                    .split(/\n|(?=\s*-\s)|(?=\s*\d+[\).]\s)/)
+                    .map(l => l.trim())
+                    .map(l => l.replace(/^[-*]\s*/, '').replace(/^\d+[\).]\s*/, '').trim())
+                    .map(l => l.replace(/[<>]/g, '').trim())
+                    .map(l => l.replace(/^kpi\s*\d+\s*:\s*/i, '').trim())
+                    .filter(l => l.length > 12)
+                    .slice(0, 3);
+                const rawDynamicNotes = dynamicNotesMatch ? dynamicNotesMatch[1] : '';
+                const dynamicNotes = rawDynamicNotes
+                    .replace(/\r/g, '\n')
+                    .split(/\n|(?=\s*-\s)|(?=\s*\d+[\).]\s)/)
+                    .map(l => l.trim())
+                    .map(l => l.replace(/^[-*]\s*/, '').replace(/^\d+[\).]\s*/, '').trim())
+                    .map(l => l.replace(/[<>]/g, '').trim())
+                    .filter(l => l.length > 10)
+                    .slice(0, 4);
+                const safeNarrative = narrative.length >= 20 ? narrative : plan.summary;
+                return {
+                    narrative: safeNarrative,
+                    drills,
+                    kpiAdjustments,
+                    altWeek,
+                    dynamicNotes: dynamicNotes.length > 0 ? dynamicNotes : buildDynamicFallbackNotes(),
+                    runId,
+                    raw: text
+                };
+            }
+            function applyLLMScopeToPlan(basePlan, llmRewrite) {
+                if (!basePlan || !llmRewrite) return basePlan;
+                const scoped = JSON.parse(JSON.stringify(basePlan));
+
+                if (Array.isArray(llmRewrite.kpiAdjustments) && llmRewrite.kpiAdjustments.length > 0) {
+                    for (let i = 0; i < Math.min(3, llmRewrite.kpiAdjustments.length); i++) {
+                        if (llmRewrite.kpiAdjustments[i]) scoped.kpis[i] = llmRewrite.kpiAdjustments[i];
+                    }
+                    if (Array.isArray(scoped.kpiSupport)) {
+                        scoped.kpiSupport = scoped.kpiSupport.map((item, idx) => ({
+                            ...item,
+                            metric: scoped.kpis[idx] || item.metric
+                        }));
+                    }
+                }
+
+                if (Array.isArray(llmRewrite.altWeek) && llmRewrite.altWeek.length > 0 && Array.isArray(scoped.dailyPlan)) {
+                    const dayOverrides = llmRewrite.altWeek
+                        .map(line => {
+                            const m = line.match(/day\s*(\d+)\s*[:\-]\s*(.*)/i);
+                            if (!m) return null;
+                            const dayNumber = parseInt(m[1], 10);
+                            const payload = (m[2] || '').trim();
+                            if (!dayNumber || dayNumber < 1 || dayNumber > 7 || !payload) return null;
+                            const parts = payload.split('|').map(p => p.trim()).filter(Boolean);
+                            const focus = parts[0] || '';
+                            const drillText = parts.slice(1).join('|').trim();
+                            const drills = drillText
+                                ? drillText.split(';').map(d => d.trim()).filter(d => d.length > 3).slice(0, 4)
+                                : [];
+                            return { dayNumber, focus, drills };
+                        })
+                        .filter(Boolean);
+
+                    dayOverrides.forEach(ovr => {
+                        const idx = ovr.dayNumber - 1;
+                        if (!scoped.dailyPlan[idx]) return;
+                        scoped.dailyPlan[idx] = {
+                            ...scoped.dailyPlan[idx],
+                            focus: ovr.focus || scoped.dailyPlan[idx].focus,
+                            drills: ovr.drills.length > 0 ? ovr.drills : scoped.dailyPlan[idx].drills
+                        };
+                    });
+                }
+
+                // Dynamic notes are shown in the AI Coach Insights section; do not duplicate into coachingInsights
+
+                return scoped;
+            }
+            async function renderCoachModal(useLLMRewrite = false) {
+                if (!lastDashboardSnapshot || lastDashboardSnapshot.totalRounds === 0) {
+                    coachContent.innerHTML = `<div class='small'>No round data is available for the current player, course, and date filters.</div>`;
+                    coachModal.style.display = 'flex';
+                    return;
+                }
+                const constraints = getCoachConstraints();
+                let plan = buildLocalCoachPlan(lastDashboardSnapshot, constraints);
+                let llmRewrite = null;
+                if (useLLMRewrite) {
+                    coachContent.innerHTML = `<div class='small'>Generating your AI-enhanced coaching plan... This may take a moment on first use.</div>`;
+                    coachModal.style.display = 'flex';
+                    try {
+                        llmRewrite = await rewriteCoachPlanWithLocalLLM(plan, lastDashboardSnapshot, constraints);
+                    } catch (err) {
+                        const fallbackRunId = Date.now();
+                        llmRewrite = {
+                            narrative: plan.summary,
+                            drills: [],
+                            altWeek: [],
+                            dynamicNotes: [
+                                `Focus cue: ${plan.headline}.`,
+                                `Micro-goal: ${plan.kpis[0]}.`
+                            ],
+                            runId: fallbackRunId,
+                            error: err && err.message ? err.message : 'AI enhancement temporarily unavailable.'
+                        };
+                    }
+                }
+                if (useLLMRewrite && llmRewrite) {
+                    plan = applyLLMScopeToPlan(plan, llmRewrite);
+                }
+                let html = `<div id='coachExportContent'>`;
+                html += `<div class='coach-controls-panel'>
+                    <label class='coach-llm-toggle'><input type='checkbox' id='coachModalUseLocalLLM' ${coachSettingsState.useLocalLLMRewrite ? 'checked' : ''}> Enhanced AI Coaching</label>
+                    <label class='coach-llm-toggle'>Days/week
+                        <select id='coachModalDaysPerWeek' class='coach-setting-select'>
+                            <option value='3' ${coachSettingsState.daysPerWeek === 3 ? 'selected' : ''}>3</option>
+                            <option value='4' ${coachSettingsState.daysPerWeek === 4 ? 'selected' : ''}>4</option>
+                            <option value='5' ${coachSettingsState.daysPerWeek === 5 ? 'selected' : ''}>5</option>
+                            <option value='6' ${coachSettingsState.daysPerWeek === 6 ? 'selected' : ''}>6</option>
+                            <option value='7' ${coachSettingsState.daysPerWeek === 7 ? 'selected' : ''}>7</option>
+                        </select>
+                    </label>
+                    <label class='coach-llm-toggle'>Minutes/session
+                        <select id='coachModalMinutesPerSession' class='coach-setting-select'>
+                            <option value='30' ${coachSettingsState.minutesPerSession === 30 ? 'selected' : ''}>30</option>
+                            <option value='45' ${coachSettingsState.minutesPerSession === 45 ? 'selected' : ''}>45</option>
+                            <option value='60' ${coachSettingsState.minutesPerSession === 60 ? 'selected' : ''}>60</option>
+                            <option value='75' ${coachSettingsState.minutesPerSession === 75 ? 'selected' : ''}>75</option>
+                        </select>
+                    </label>
+                    <label class='coach-llm-toggle'>Intent
+                        <select id='coachModalIntentPreset' class='coach-setting-select'>
+                            <option value='balanced' ${coachSettingsState.intentPreset === 'balanced' ? 'selected' : ''}>Balanced Improvement</option>
+                            <option value='prep_tournament' ${coachSettingsState.intentPreset === 'prep_tournament' ? 'selected' : ''}>Prep for Tournament</option>
+                            <option value='short_sessions' ${coachSettingsState.intentPreset === 'short_sessions' ? 'selected' : ''}>Short Sessions Only</option>
+                            <option value='putting_priority' ${coachSettingsState.intentPreset === 'putting_priority' ? 'selected' : ''}>Putting Priority Week</option>
+                            <option value='custom' ${coachSettingsState.intentPreset === 'custom' ? 'selected' : ''}>Custom Intent</option>
+                        </select>
+                    </label>
+                    <label class='coach-llm-toggle'>Intent note
+                        <input id='coachModalIntentText' class='coach-intent-input' type='text' maxlength='90' placeholder='Optional custom intent' value="${(coachSettingsState.intentText || '').replace(/"/g, '&quot;')}">
+                    </label>
+                </div>`;
+                html += `<div class='small'>Player(s): <strong>${lastDashboardSnapshot.playerLabel}</strong> • Course(s): <strong>${lastDashboardSnapshot.courseLabel}</strong> • Date: <strong>${lastDashboardSnapshot.dateLabel}</strong></div>`;
+                html += `<div class='coach-profile-row'><span class='coach-profile-pill'>Player Archetype: ${plan.archetype}</span><span class='coach-profile-pill'>Intent: ${plan.intentLabel}</span><span class='coach-profile-pill'>Rounds in scope: ${lastDashboardSnapshot.totalRounds}</span></div>`;
+                if (plan.archetypeSelection && plan.archetypeSelection.summary) {
+                    html += `<div class='coach-section-title'>Archetype Selection</div>`;
+                    html += `<div class='small'>Selected archetype: <strong>${plan.archetypeSelection.selected}</strong></div>`;
+                    html += `<div class='small'>${plan.archetypeSelection.summary}</div>`;
+                    if (Array.isArray(plan.archetypeSelection.details) && plan.archetypeSelection.details.length > 0) {
+                        html += `<ul class='coach-list'>${plan.archetypeSelection.details.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                    }
+                }
+                html += `<div class='coach-popup-headline'>${plan.headline}</div>`;
+                html += `<div class='coach-popup-summary'>${plan.summary}</div>`;
+                const norm = (t) => (t || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+                const isGarbageNarrative = (text) => {
+                    if (!text || text.length < 20) return true;
+                    const words = text.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length > 2);
+                    if (words.length < 5) return true;
+                    const freq = {};
+                    words.forEach(w => { freq[w] = (freq[w] || 0) + 1; });
+                    const maxFreq = Math.max(...Object.values(freq));
+                    if (maxFreq / words.length > 0.22) return true;
+                    const capsWords = text.split(/\s+/).filter(w => w.length > 3 && w === w.toUpperCase() && /[A-Z]/.test(w));
+                    if (capsWords.length / Math.max(1, text.split(/\s+/).length) > 0.25) return true;
+                    // Detect prompt echo — model regurgitated the instruction text
+                    const promptPhrases = [
+                        'rewrite this disc golf', 'unique narrative', 'fresh drill phrasing',
+                        'do not write words like', 'keep practical coaching tone',
+                        'output only in this', 'plain-text format', 'no placeholders',
+                        'run context id', 'user intent:', 'kpi_scope', 'alt_week', 'dynamic_notes'
+                    ];
+                    const lower = text.toLowerCase();
+                    if (promptPhrases.some(phrase => lower.includes(phrase))) return true;
+                    return false;
+                };
+                if (llmRewrite && !llmRewrite.error) {
+                    const baseSummary = norm(plan.summary);
+                    const rewriteNarrative = norm(llmRewrite.narrative);
+                    const existingDrills = new Set(plan.focuses.flatMap(f => (f.drills || []).map(norm)));
+                    const novelDrills = (llmRewrite.drills || []).filter(d => !existingDrills.has(norm(d)));
+                    const dynamicNotes = (llmRewrite.dynamicNotes || []).filter(line => line && line.length > 0);
+                    const narrativeOk = !isGarbageNarrative(llmRewrite.narrative);
+                    const summarySimilar = narrativeOk && rewriteNarrative && (baseSummary.includes(rewriteNarrative) || rewriteNarrative.includes(baseSummary));
+                    html += `<div class='coach-section-title'>AI Coach Insights</div>`;
+                    if (!narrativeOk || summarySimilar) {
+                        html += `<div class='small'>Personalized tactics for this session are below.</div>`;
+                    } else {
+                        html += `<div class='small'>${llmRewrite.narrative}</div>`;
+                    }
+                    if (novelDrills.length > 0) {
+                        html += `<ul class='coach-list'>${novelDrills.map(d => `<li>${d}</li>`).join('')}</ul>`;
+                    }
+                    if (dynamicNotes.length > 0) {
+                        html += `<ul class='coach-list'>${dynamicNotes.map(line => `<li>${line}</li>`).join('')}</ul>`;
+                    }
+                }
+                if (llmRewrite && llmRewrite.error) {
+                    if (llmRewrite.dynamicNotes && llmRewrite.dynamicNotes.length > 0) {
+                        html += `<div class='coach-section-title'>Coaching Notes</div>`;
+                        html += `<ul class='coach-list'>${llmRewrite.dynamicNotes.map(line => `<li>${line}</li>`).join('')}</ul>`;
+                    }
+                }
+                html += `<div class='coach-section-title'>Performance Analysis</div>`;
+                html += `<ul class='coach-list'>${plan.analysis.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                html += `<div class='coach-section-title'>Strengths</div>`;
+                html += `<ul class='coach-list'>${plan.strengths.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                html += `<div class='coach-section-title'>Improvement Areas</div>`;
+                html += `<ul class='coach-list'>${plan.gaps.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                html += `<div class='coach-section-title'>Priority Focus Areas</div>`;
+                html += `<div class='coach-popup-grid'>`;
+                plan.focuses.forEach((focus, idx) => {
+                    html += `<div class='card coach-popup-card'><div class='card-title'>Priority ${idx + 1} • Confidence: ${focus.confidence}</div><div class='card-value'>${focus.title}</div><div class='small'>${focus.why}</div><ul class='coach-list'>${(focus.evidence || []).map(item => `<li>${item}</li>`).join('')}</ul><div class='small'><strong>Target:</strong> ${focus.target}</div><div class='small'><strong>Drills:</strong> ${focus.drills.join(' ')}</div></div>`;
+                });
+                html += `</div>`;
+                html += `<div class='coach-section-title'>Coaching Insights</div>`;
+                html += `<ul class='coach-list'>${plan.coachingInsights.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                if (plan.customIntentActions) {
+                    html += `<div class='coach-section-title'>Custom Intent Actions</div>`;
+                    html += `<div class='small'><strong>Mapped Themes:</strong> ${plan.customIntentActions.mappedThemes.join(', ')}</div>`;
+                    html += `<ul class='coach-list'>${(plan.customIntentActions.drillPlan || []).map(item => `<li>${item}</li>`).join('')}</ul>`;
+                    html += `<div class='small'><strong>Tracking Checks:</strong></div>`;
+                    html += `<ul class='coach-list'>${(plan.customIntentActions.checks || []).map(item => `<li>${item}</li>`).join('')}</ul>`;
+                }
+                html += `<div class='coach-section-title'>Track These KPIs</div>`;
+                html += `<ul class='coach-list'>${plan.kpis.map(item => `<li>${item}</li>`).join('')}</ul>`;
+                html += `<div class='coach-section-title'>KPI Support Plan</div>`;
+                html += `<div class='coach-popup-grid'>`;
+                plan.kpiSupport.forEach(item => {
+                    const drillItems = (item.drills || []).map(d => `<li><strong>${d.title}</strong> (${d.minutes}): ${d.detail}</li>`).join('');
+                    html += `<div class='card coach-popup-card'><div class='card-title'>${item.title}</div><div class='small'><strong>Target:</strong> ${item.metric}</div><div class='small'><strong>Cadence:</strong> ${item.cadence}</div><div class='small'><strong>Check:</strong> ${item.check}</div><ul class='coach-list'>${drillItems}</ul></div>`;
+                });
+                html += `</div>`;
+                html += `<div class='coach-section-title'>7-Day Drill Plan</div>`;
+                html += `<div class='coach-day-grid'>`;
+                plan.dailyPlan.forEach(day => {
+                    html += `<div class='card coach-day-card'><div class='card-title'>${day.day}</div><div class='card-value'>${day.focus}</div><div class='small'><strong>Duration:</strong> ${day.duration}</div><div class='small'><strong>Cadence:</strong> ${day.cadence || 'Practice block'}</div><ul class='coach-list'>${day.drills.map(d => `<li>${d}</li>`).join('')}</ul></div>`;
+                });
+                html += `</div>`;
+                html += `</div>`;
+                coachContent.innerHTML = html;
+                const modalLLM = document.getElementById('coachModalUseLocalLLM');
+                const modalDays = document.getElementById('coachModalDaysPerWeek');
+                const modalMinutes = document.getElementById('coachModalMinutesPerSession');
+                const modalIntentPreset = document.getElementById('coachModalIntentPreset');
+                const modalIntentText = document.getElementById('coachModalIntentText');
+                if (modalLLM) {
+                    modalLLM.addEventListener('change', async () => {
+                        coachSettingsState.useLocalLLMRewrite = modalLLM.checked;
+                        localStorage.setItem('coach-use-local-llm', String(coachSettingsState.useLocalLLMRewrite));
+                        await renderCoachModal(coachSettingsState.useLocalLLMRewrite);
+                    });
+                }
+                if (modalDays) {
+                    modalDays.addEventListener('change', async () => {
+                        coachSettingsState.daysPerWeek = safeInt(modalDays.value) || 5;
+                        localStorage.setItem('coach-days-per-week', String(coachSettingsState.daysPerWeek));
+                        await renderCoachModal(coachSettingsState.useLocalLLMRewrite);
+                    });
+                }
+                if (modalMinutes) {
+                    modalMinutes.addEventListener('change', async () => {
+                        coachSettingsState.minutesPerSession = safeInt(modalMinutes.value) || 45;
+                        localStorage.setItem('coach-minutes-per-session', String(coachSettingsState.minutesPerSession));
+                        await renderCoachModal(coachSettingsState.useLocalLLMRewrite);
+                    });
+                }
+                if (modalIntentPreset) {
+                    modalIntentPreset.addEventListener('change', async () => {
+                        coachSettingsState.intentPreset = modalIntentPreset.value || 'balanced';
+                        localStorage.setItem('coach-intent-preset', coachSettingsState.intentPreset);
+                        await renderCoachModal(coachSettingsState.useLocalLLMRewrite);
+                    });
+                }
+                if (modalIntentText) {
+                    modalIntentText.addEventListener('change', async () => {
+                        coachSettingsState.intentText = modalIntentText.value.trim();
+                        localStorage.setItem('coach-intent-text', coachSettingsState.intentText);
+                        await renderCoachModal(coachSettingsState.useLocalLLMRewrite);
+                    });
+                }
+                coachModal.style.display = 'flex';
             }
 
 
@@ -627,6 +1612,32 @@ label[for='playerSelect'] {
 
                 // Recent 10 rounds (most recent)
                 const recent = validRounds.slice(0, 10);
+                const riskOutcomeCount = bogies + dblBogies + trpBogies + other;
+                const totalOutcomeCount = aces + birdies + pars + riskOutcomeCount;
+                const recentTenAvgToPar = recent.length > 0
+                    ? (recent.map(r => safeInt(r['+/-'])).reduce((a, b) => a + b, 0) / recent.length)
+                    : 0;
+                const previousTen = validRounds.slice(10, 20);
+                const previousTenAvgToPar = previousTen.length > 0
+                    ? (previousTen.map(r => safeInt(r['+/-'])).reduce((a, b) => a + b, 0) / previousTen.length)
+                    : null;
+                lastDashboardSnapshot = {
+                    playerLabel: selected.join(', '),
+                    courseLabel: selectedC.length === allCourses.length ? 'All' : selectedC.join(', '),
+                    dateLabel: getDateFilterLabel(dateFilter),
+                    totalRounds,
+                    avgScore,
+                    avgToPar,
+                    totalThrows,
+                    totalOutcomes,
+                    riskOutcomeRate: totalOutcomeCount > 0 ? (riskOutcomeCount / totalOutcomeCount) : 0,
+                    riskOutcomeRatePct: totalOutcomeCount > 0 ? ((100 * riskOutcomeCount / totalOutcomeCount).toFixed(1)) : '0.0',
+                    birdieRate: totalOutcomeCount > 0 ? (birdies / totalOutcomeCount) : 0,
+                    birdieRatePct: totalOutcomeCount > 0 ? ((100 * birdies / totalOutcomeCount).toFixed(1)) : '0.0',
+                    toParStdDev: calcStdDev(toPars),
+                    recentTenAvgToPar,
+                    previousTenAvgToPar
+                };
 
                 // Summary cards HTML
                 let summaryHtml = `<div class='small'>Player(s): <strong>${selected.join(', ')}</strong> &nbsp;•&nbsp; Course(s): <strong>${selectedC.length === allCourses.length ? 'All' : selectedC.join(', ')}</strong> &nbsp;•&nbsp; Date: <strong>${getDateFilterLabel(dateFilter)}</strong> &nbsp;•&nbsp; Source: UDisc Scorecards Export (Summary)</div>`;
@@ -974,6 +1985,11 @@ label[for='playerSelect'] {
             }
 
             // Initial render (default player and all courses)
+            const generateCoachBtn = document.getElementById('generateCoachBtn');
+            generateCoachBtn.onclick = async function(e) {
+                e.preventDefault();
+                await renderCoachModal(coachSettingsState.useLocalLLMRewrite);
+            };
             setTimeout(() => {
                 renderPlayerDashboard(selectedPlayers, selectedCourses);
             }, 0);
@@ -1041,6 +2057,48 @@ document.addEventListener('click', function(e) {
                 pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgWidth, sliceImgHeight);
             }
             pdf.save('scorecard.pdf');
+        });
+    }
+    const coachImageTrigger = e.target.closest('#coachSaveImageBtn');
+    if (coachImageTrigger) {
+        e.preventDefault();
+        const content = document.getElementById('coachExportContent');
+        if (!content) return;
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
+        html2canvas(content, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+            const link = document.createElement('a');
+            link.download = 'ai-coach-plan.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    }
+    const coachPdfTrigger = e.target.closest('#coachSavePdfBtn');
+    if (coachPdfTrigger) {
+        e.preventDefault();
+        const content = document.getElementById('coachExportContent');
+        if (!content) return;
+        const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#181f2f';
+        html2canvas(content, {backgroundColor: bgColor, scale: 2}).then(canvas => {
+            const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'pt', format: 'a4'});
+            const margin = 16;
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = pageWidth - margin * 2;
+            const pageHeightInCanvas = Math.floor((pageHeight - margin * 2) * canvas.width / imgWidth);
+            const totalPages = Math.ceil(canvas.height / pageHeightInCanvas);
+            for (let page = 0; page < totalPages; page++) {
+                if (page > 0) pdf.addPage();
+                const sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = canvas.width;
+                const sliceStart = page * pageHeightInCanvas;
+                const sliceHeight = Math.min(pageHeightInCanvas, canvas.height - sliceStart);
+                sliceCanvas.height = sliceHeight;
+                const ctx = sliceCanvas.getContext('2d');
+                ctx.drawImage(canvas, 0, -sliceStart);
+                const sliceImgHeight = sliceHeight * imgWidth / canvas.width;
+                pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, imgWidth, sliceImgHeight);
+            }
+            pdf.save('ai-coach-plan.pdf');
         });
     }
     const imageTrigger = e.target.closest('#saveImageBtn');

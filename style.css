@@ -460,6 +460,64 @@ th.left-align-col, td.left-align-col {
     flex-direction: column;
     align-items: stretch;
 }
+.coach-modal-content {
+    max-width: 760px;
+}
+.coach-popup-headline {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 10px 0 6px 0;
+    color: var(--text-heading);
+}
+.coach-popup-summary {
+    margin-bottom: 12px;
+}
+.coach-profile-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0 4px 0;
+}
+.coach-profile-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-sub);
+    font-size: 0.78rem;
+}
+.coach-section-title {
+    margin: 10px 0 6px 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-heading);
+}
+.coach-popup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px;
+}
+.coach-popup-card .card-value {
+    font-size: 1rem;
+    margin-bottom: 4px;
+}
+.coach-list {
+    margin: 4px 0 8px 18px;
+    color: var(--text);
+}
+.coach-list li {
+    margin-bottom: 4px;
+}
+.coach-day-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 10px;
+}
+.coach-day-card .card-value {
+    font-size: 0.95rem;
+}
 .close {
     color: var(--close-color);
     position: absolute;
@@ -571,6 +629,40 @@ th.left-align-col, td.left-align-col {
 }
 .export-link:hover {
     color: var(--accent-hover);
+}
+.coach-llm-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--text-sub);
+}
+.coach-llm-toggle input[type="checkbox"] {
+    accent-color: var(--accent);
+}
+.coach-setting-select {
+    background: var(--bg-elevated);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+}
+.coach-controls-panel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.coach-intent-input {
+    background: var(--bg-elevated);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.8rem;
+    min-width: 140px;
 }
  body {
      font-family: Arial, sans-serif;
@@ -687,6 +779,18 @@ th.left-align-col, td.left-align-col {
         margin: 8px auto;
         box-sizing: border-box;
     }
+    #coachModal {
+        align-items: flex-start !important;
+    }
+    #coachModal .modal-content {
+        margin: 0 auto !important;
+    }
+    .coach-popup-grid {
+        grid-template-columns: 1fr;
+    }
+    .coach-day-grid {
+        grid-template-columns: 1fr;
+    }
     .floating-players-btn {
         right: 4vw !important;
         top: 8px !important;
@@ -730,6 +834,23 @@ th.left-align-col, td.left-align-col {
     }
     .export-link {
         font-size: 0.85rem;
+    }
+    .coach-llm-toggle {
+        font-size: 0.75rem;
+    }
+    .coach-setting-select {
+        font-size: 0.72rem;
+        padding: 1px 3px;
+    }
+    .coach-intent-input {
+        font-size: 0.72rem;
+        min-width: 110px;
+        padding: 1px 4px;
+    }
+    .coach-controls-panel {
+        display: flex;
+        width: 100%;
+        margin-top: 4px;
     }
     .dashboard-help-footer {
         margin-top: 18px;
